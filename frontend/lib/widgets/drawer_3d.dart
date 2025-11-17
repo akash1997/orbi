@@ -21,13 +21,16 @@ class Drawer3D extends StatefulWidget {
 
 class Drawer3DState extends State<Drawer3D>
     with SingleTickerProviderStateMixin {
-  var _maxSlide = 0.75;
-  var _extraHeight = 0.1;
+  static const double _maxSlideRatio = 0.75;
+  static const double _extraHeightRatio = 0.1;
   double _startingPos = 0;
   var _drawerVisible = false;
   late AnimationController _animationController;
   Size _screen = const Size(0, 0);
   late CurvedAnimation _animator;
+
+  double get _maxSlide => _screen.width * _maxSlideRatio;
+  double get _extraHeight => _screen.height * _extraHeightRatio;
 
   @override
   void initState() {
@@ -45,10 +48,8 @@ class Drawer3DState extends State<Drawer3D>
 
   @override
   void didChangeDependencies() {
-    _screen = MediaQuery.of(context).size;
-    _maxSlide *= _screen.width;
-    _extraHeight *= _screen.height;
     super.didChangeDependencies();
+    _screen = MediaQuery.of(context).size;
   }
 
   @override
