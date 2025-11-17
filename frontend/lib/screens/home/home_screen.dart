@@ -6,6 +6,7 @@ import '../../widgets/drawer_3d.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:shimmer/shimmer.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -14,16 +15,40 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with SingleTickerProviderStateMixin {
   final _drawerKey = GlobalKey<Drawer3DState>();
+  late AnimationController _gradientController;
+  late Animation<double> _gradientAnimation;
 
   @override
   void initState() {
     super.initState();
+
+    // Initialize gradient animation
+    _gradientController = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _gradientAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _gradientController,
+      curve: Curves.easeInOut,
+    ));
+
     // Start monitoring when home screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startMonitoring();
     });
+  }
+
+  @override
+  void dispose() {
+    _gradientController.dispose();
+    super.dispose();
   }
 
   Future<void> _startMonitoring() async {
@@ -109,125 +134,311 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             );
           }
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              await ref
-                  .read(fileMonitorProvider.notifier)
-                  .stopMonitoring();
-              await ref
-                  .read(fileMonitorProvider.notifier)
-                  .startMonitoring(config.monitoredFolderPath);
-            },
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
+          return AnimatedBuilder(
+            animation: _gradientAnimation,
+            builder: (context, child) {
+              return Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color.lerp(
+                        Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                        Theme.of(context).colorScheme.primaryContainer.withOpacity(0.7),
+                        _gradientAnimation.value,
+                      )!,
+                      Color.lerp(
+                        Theme.of(context).colorScheme.primaryContainer.withOpacity(0.2),
+                        Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                        _gradientAnimation.value,
+                      )!,
+                      Theme.of(context).colorScheme.surface,
+                    ],
+                    stops: const [0.0, 0.5, 1.0],
+                  ),
+                ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 80), // Space for header
-
-                    // Detected Files Section
-                    _buildDetectedFilesSection(
-                      context,
-                      fileMonitorState.detectedFiles,
+                    const SizedBox(height: 100),
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: () async {
+                          await ref
+                              .read(fileMonitorProvider.notifier)
+                              .stopMonitoring();
+                          await ref
+                              .read(fileMonitorProvider.notifier)
+                              .startMonitoring(config.monitoredFolderPath);
+                        },
+                        child: CustomScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          slivers: [
+                            const SliverToBoxAdapter(
+                              child: SizedBox(height: 16),
+                            ),
+                            SliverPadding(
+                              padding: const EdgeInsets.all(16.0),
+                              sliver: _buildUserGrid(context, isLoading: true),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
-              ),
-            ),
+              );
+            },
           );
         },
       ),
     );
   }
 
-  Widget _buildDetectedFilesSection(
-    BuildContext context,
-    List detectedFiles,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'Detected Files',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
+  Widget _buildUserGrid(BuildContext context, {required bool isLoading}) {
+    if (isLoading) {
+      return _buildShimmerGrid(context);
+    }
+
+    // TODO: Replace with actual user data
+    final mockUsers = List.generate(
+      10,
+      (index) => {
+        'name': 'User ${index + 1}',
+        'duration': '${(index + 1) * 2}h ${(index + 1) * 15}m',
+        'fileCount': (index + 1) * 3,
+      },
+    );
+
+    return SliverGrid(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        childAspectRatio: 0.75,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          final user = mockUsers[index];
+          return _buildUserCard(context, user);
+        },
+        childCount: mockUsers.length,
+      ),
+    );
+  }
+
+  Widget _buildShimmerGrid(BuildContext context) {
+    return SliverGrid(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        childAspectRatio: 0.75,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      delegate: SliverChildBuilderDelegate(
+        (context, index) => _buildShimmerCard(context),
+        childCount: 9,
+      ),
+    );
+  }
+
+  Widget _buildShimmerCard(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Shimmer.fromColors(
+        baseColor: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+        highlightColor: isDark ? Colors.grey[700]! : Colors.grey[100]!,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Large circular avatar
+              Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.grey[300],
+                ),
               ),
+              const SizedBox(height: 16),
+              // Name placeholder
+              Container(
+                width: 70,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Duration placeholder
+              Container(
+                width: 50,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              const SizedBox(height: 6),
+              // File count placeholder
+              Container(
+                width: 40,
+                height: 11,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 12),
-        if (detectedFiles.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(32.0),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.audio_file,
-                    size: 48,
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No audio files detected yet',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Record audio in your monitored folder to see it here',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          )
-        else
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: detectedFiles.length,
-            itemBuilder: (context, index) {
-              final file = detectedFiles[index];
-              return Card(
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    child: Icon(
-                      Icons.audio_file,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+      ),
+    );
+  }
+
+  Widget _buildUserCard(BuildContext context, Map<String, dynamic> user) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Generate a color based on the user's name for visual variety
+    final colors = [
+      Colors.blue,
+      Colors.purple,
+      Colors.teal,
+      Colors.orange,
+      Colors.pink,
+      Colors.indigo,
+      Colors.cyan,
+      Colors.amber,
+    ];
+    final colorIndex = user['name'].toString().hashCode % colors.length;
+    final avatarColor = colors[colorIndex];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            // TODO: Navigate to user detail screen
+            print('Tapped on ${user['name']}');
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Large circular avatar with gradient
+                Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [
+                        avatarColor.shade300,
+                        avatarColor.shade600,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                  ),
-                  title: Text(
-                    file.fileName,
-                    style: const TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: 4),
-                      Text(
-                        DateFormat('MMM dd, yyyy • hh:mm a')
-                            .format(file.detectedAt),
-                      ),
-                      Text(
-                        '${(file.fileSize / 1024).toStringAsFixed(2)} KB',
+                    boxShadow: [
+                      BoxShadow(
+                        color: avatarColor.withOpacity(0.4),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                  trailing: const Icon(
-                    Icons.check_circle,
-                    color: Colors.green,
+                  child: Center(
+                    child: Text(
+                      user['name'].toString().substring(0, 1).toUpperCase(),
+                      style: const TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
-              );
-            },
+                const SizedBox(height: 12),
+                // Name with better typography
+                Text(
+                  user['name'],
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
+                      ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+                // Duration with icon
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.access_time,
+                      size: 14,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      user['duration'],
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                // File count with subtle background
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${user['fileCount']} files',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSecondaryContainer,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                ),
+              ],
+            ),
           ),
-      ],
+        ),
+      ),
     );
   }
 }
