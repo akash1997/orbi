@@ -155,8 +155,10 @@ class _Drawer3DState extends State<Drawer3D>
         child: AnimatedBuilder(
           animation: _animator,
           builder: (context, widget) {
+            final isOpen = _animator.value >= 0.2;
+            print('🎯 [Drawer3D] Drawer animation value: ${_animator.value}, isOpen: $isOpen');
             return IgnorePointer(
-              ignoring: _animator.value < 0.2,
+              ignoring: !isOpen,
               child: Transform.translate(
                 offset: Offset(_maxSlide * (_animator.value - 1), 0),
                 child: Transform(
@@ -169,9 +171,12 @@ class _Drawer3DState extends State<Drawer3D>
               ),
             );
           },
-          child: Container(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: Stack(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => print('👆 [Drawer3D] Drawer container tapped'),
+            child: Container(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: Stack(
               clipBehavior: Clip.none,
               children: <Widget>[
                 // Shadow edge
@@ -313,6 +318,8 @@ class _Drawer3DState extends State<Drawer3D>
                 ),
               ],
             ),
+              ),
+            ),
           ),
         ),
       );
@@ -379,19 +386,26 @@ class _Drawer3DState extends State<Drawer3D>
   Widget _buildOverlay() => Positioned.fill(
         child: AnimatedBuilder(
           animation: _animator,
-          builder: (_, widget) => Opacity(
-            opacity: 1 - _animator.value,
-            child: Transform.translate(
-              offset: Offset((_maxSlide + 50) * _animator.value, 0),
-              child: Transform(
-                transform: Matrix4.identity()
-                  ..setEntry(3, 2, 0.001)
-                  ..rotateY((pi / 2 + 0.1) * -_animator.value),
-                alignment: Alignment.centerLeft,
-                child: widget,
+          builder: (_, widget) {
+            final ignoreOverlay = _animator.value > 0.0;
+            print('🎭 [Drawer3D] Overlay ignoring: $ignoreOverlay (animator: ${_animator.value})');
+            return IgnorePointer(
+              ignoring: ignoreOverlay,
+              child: Opacity(
+                opacity: 1 - _animator.value,
+                child: Transform.translate(
+                  offset: Offset((_maxSlide + 50) * _animator.value, 0),
+                  child: Transform(
+                    transform: Matrix4.identity()
+                      ..setEntry(3, 2, 0.001)
+                      ..rotateY((pi / 2 + 0.1) * -_animator.value),
+                    alignment: Alignment.centerLeft,
+                    child: widget,
+                  ),
+                ),
               ),
-            ),
-          ),
+            );
+          },
           child: this.widget.child,
         ),
       );
