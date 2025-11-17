@@ -29,6 +29,7 @@ class _InsightDetailScreenState extends ConsumerState<InsightDetailScreen> {
   late String _currentName;
   String? _avatarImagePath;
   final _nameController = TextEditingController();
+  bool _showEditButtons = false;
 
   @override
   void initState() {
@@ -37,6 +38,15 @@ class _InsightDetailScreenState extends ConsumerState<InsightDetailScreen> {
     _avatarImagePath = widget.initialAvatarImagePath;
     _nameController.text = _currentName;
     _loadProfile();
+
+    // Show edit buttons after Hero animation completes (typically 300ms)
+    Future.delayed(const Duration(milliseconds: 350), () {
+      if (mounted) {
+        setState(() {
+          _showEditButtons = true;
+        });
+      }
+    });
   }
 
   @override
@@ -249,27 +259,32 @@ class _InsightDetailScreenState extends ConsumerState<InsightDetailScreen> {
                           ),
                         ),
                       ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Material(
-                          color: Theme.of(context).colorScheme.primary,
-                          shape: const CircleBorder(),
-                          elevation: 4,
-                          child: InkWell(
-                            onTap: _pickImage,
-                            customBorder: const CircleBorder(),
-                            child: const Padding(
-                              padding: EdgeInsets.all(8.0),
-                              child: Icon(
-                                Icons.camera_alt,
-                                size: 20,
-                                color: Colors.white,
+                      if (_showEditButtons)
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: AnimatedOpacity(
+                            opacity: _showEditButtons ? 1.0 : 0.0,
+                            duration: const Duration(milliseconds: 200),
+                            child: Material(
+                              color: Theme.of(context).colorScheme.primary,
+                              shape: const CircleBorder(),
+                              elevation: 4,
+                              child: InkWell(
+                                onTap: _pickImage,
+                                customBorder: const CircleBorder(),
+                                child: const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: Icon(
+                                    Icons.camera_alt,
+                                    size: 20,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -284,14 +299,20 @@ class _InsightDetailScreenState extends ConsumerState<InsightDetailScreen> {
                             ),
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        onPressed: _editName,
-                        icon: const Icon(Icons.edit, size: 20),
-                        tooltip: 'Edit name',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                      ),
+                      if (_showEditButtons) ...[
+                        const SizedBox(width: 8),
+                        AnimatedOpacity(
+                          opacity: _showEditButtons ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 200),
+                          child: IconButton(
+                            onPressed: _editName,
+                            icon: const Icon(Icons.edit, size: 20),
+                            tooltip: 'Edit name',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ],
