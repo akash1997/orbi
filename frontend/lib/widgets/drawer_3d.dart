@@ -3,21 +3,17 @@ import 'package:flutter/material.dart';
 
 class Drawer3D extends StatefulWidget {
   final Widget child;
-  final bool isDarkMode;
-  final ValueChanged<bool> onThemeChanged;
 
   const Drawer3D({
     super.key,
     required this.child,
-    required this.isDarkMode,
-    required this.onThemeChanged,
   });
 
   @override
-  State<Drawer3D> createState() => _Drawer3DState();
+  State<Drawer3D> createState() => Drawer3DState();
 }
 
-class _Drawer3DState extends State<Drawer3D>
+class Drawer3DState extends State<Drawer3D>
     with SingleTickerProviderStateMixin {
   var _maxSlide = 0.75;
   var _extraHeight = 0.1;
@@ -57,7 +53,6 @@ class _Drawer3DState extends State<Drawer3D>
 
   @override
   Widget build(BuildContext context) {
-    print('🏗️ [Drawer3D] Building widget, isDarkMode: ${widget.isDarkMode}');
     return Material(
       child: GestureDetector(
         onHorizontalDragStart: _onDragStart,
@@ -157,24 +152,21 @@ class _Drawer3DState extends State<Drawer3D>
           builder: (context, widget) {
             final isOpen = _animator.value >= 0.2;
             print('🎯 [Drawer3D] Drawer animation value: ${_animator.value}, isOpen: $isOpen');
-            return IgnorePointer(
-              ignoring: !isOpen,
-              child: Transform.translate(
-                offset: Offset(_maxSlide * (_animator.value - 1), 0),
-                child: Transform(
-                  transform: Matrix4.identity()
-                    ..setEntry(3, 2, 0.001)
-                    ..rotateY(pi * (1 - _animator.value) / 2),
-                  alignment: Alignment.centerRight,
+            return Transform.translate(
+              offset: Offset(_maxSlide * (_animator.value - 1), 0),
+              child: Transform(
+                transform: Matrix4.identity()
+                  ..setEntry(3, 2, 0.001)
+                  ..rotateY(pi * (1 - _animator.value) / 2),
+                alignment: Alignment.centerRight,
+                child: IgnorePointer(
+                  ignoring: !isOpen,
                   child: widget,
                 ),
               ),
             );
           },
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => print('👆 [Drawer3D] Drawer container tapped'),
-            child: Container(
+          child: Container(
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               child: Stack(
               clipBehavior: Clip.none,
@@ -229,36 +221,6 @@ class _Drawer3DState extends State<Drawer3D>
                             ),
                             const SizedBox(height: 32),
 
-                            // Dark Mode Toggle
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    widget.isDarkMode ? Icons.dark_mode : Icons.light_mode,
-                                    size: 24,
-                                  ),
-                                  const SizedBox(width: 16),
-                                  const Expanded(
-                                    child: Text('Dark Mode'),
-                                  ),
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      print('🎨 [Drawer3D] Button pressed!');
-                                      print('🎨 [Drawer3D] Current isDarkMode: ${widget.isDarkMode}');
-                                      final newValue = !widget.isDarkMode;
-                                      print('🎨 [Drawer3D] Toggling to: $newValue');
-                                      widget.onThemeChanged(newValue);
-                                      print('🎨 [Drawer3D] onThemeChanged called');
-                                    },
-                                    child: Text(widget.isDarkMode ? 'Light' : 'Dark'),
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            const Divider(height: 32),
-
                             // Phase 2 Settings
                             Text(
                               'COMING IN PHASE 2',
@@ -307,18 +269,7 @@ class _Drawer3DState extends State<Drawer3D>
                     ),
                   ),
                 ),
-                AnimatedBuilder(
-                  animation: _animator,
-                  builder: (_, __) => Container(
-                    width: _maxSlide,
-                    color: Colors.black.withAlpha(
-                      (150 * (1 - _animator.value)).floor(),
-                    ),
-                  ),
-                ),
               ],
-            ),
-              ),
             ),
           ),
         ),

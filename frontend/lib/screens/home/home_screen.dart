@@ -14,6 +14,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final _drawerKey = GlobalKey<Drawer3DState>();
+
   @override
   void initState() {
     super.initState();
@@ -37,15 +39,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final configAsync = ref.watch(configProvider);
     final fileMonitorState = ref.watch(fileMonitorProvider);
-    final isDarkMode = ref.watch(themeProvider);
 
     return Drawer3D(
-      isDarkMode: isDarkMode,
-      onThemeChanged: (value) {
-        print('🏠 [HomeScreen] onThemeChanged called with value: $value');
-        ref.read(themeProvider.notifier).setTheme(value);
-        print('🏠 [HomeScreen] setTheme called on provider');
-      },
+      key: _drawerKey,
       child: configAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => Center(
