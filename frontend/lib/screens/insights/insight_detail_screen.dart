@@ -161,6 +161,7 @@ class _InsightDetailScreenState extends ConsumerState<InsightDetailScreen> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: Text(
           'Insight Details',
@@ -169,7 +170,8 @@ class _InsightDetailScreenState extends ConsumerState<InsightDetailScreen> {
               ),
         ),
         centerTitle: true,
-        backgroundColor: Theme.of(context).colorScheme.surface,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
@@ -180,7 +182,10 @@ class _InsightDetailScreenState extends ConsumerState<InsightDetailScreen> {
           // Avatar and Name Section
           SliverToBoxAdapter(
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 32.0),
+              padding: EdgeInsets.only(
+                top: MediaQuery.of(context).padding.top + kToolbarHeight + 16,
+                bottom: 32.0,
+              ),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
