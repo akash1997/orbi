@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/config_provider.dart';
 import '../../providers/file_monitor_provider.dart';
+import '../../providers/speaker_profile_provider.dart';
 import '../../widgets/drawer_3d.dart';
 import '../insights/insight_detail_screen.dart';
 import 'package:intl/intl.dart';
@@ -21,6 +23,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   final _drawerKey = GlobalKey<Drawer3DState>();
   late AnimationController _gradientController;
   late Animation<double> _gradientAnimation;
+  final Map<String, String?> _avatarCache = {};
 
   @override
   void initState() {
@@ -43,6 +46,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // Start monitoring when home screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startMonitoring();
+      _loadAvatarProfiles();
     });
   }
 
@@ -59,6 +63,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       await ref
           .read(fileMonitorProvider.notifier)
           .startMonitoring(config.monitoredFolderPath);
+    }
+  }
+
+  Future<void> _loadAvatarProfiles() async {
+    final mockUsers = [
+      {'name': 'Alice Johnson', 'duration': '2h 45m', 'fileCount': 8},
+      {'name': 'Bob Smith', 'duration': '1h 30m', 'fileCount': 5},
+      {'name': 'Carol Davis', 'duration': '3h 15m', 'fileCount': 12},
+      {'name': 'David Wilson', 'duration': '45m', 'fileCount': 3},
+      {'name': 'Emma Brown', 'duration': '2h 20m', 'fileCount': 7},
+      {'name': 'Frank Miller', 'duration': '1h 50m', 'fileCount': 6},
+      {'name': 'Grace Lee', 'duration': '4h 10m', 'fileCount': 15},
+      {'name': 'Henry Taylor', 'duration': '1h 15m', 'fileCount': 4},
+      {'name': 'Iris Anderson', 'duration': '3h 30m', 'fileCount': 11},
+      {'name': 'Jack Thomas', 'duration': '2h 5m', 'fileCount': 9},
+    ];
+
+    final service = ref.read(speakerProfileServiceProvider);
+    for (var user in mockUsers) {
+      final speakerId = user['name'].toString().toLowerCase().replaceAll(' ', '_');
+      final profile = await service.getProfile(speakerId);
+      if (mounted) {
+        setState(() {
+          _avatarCache[speakerId] = profile?.avatarImagePath;
+        });
+      }
     }
   }
 
@@ -310,6 +340,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
+  String _getInitials(String name) {
+    final parts = name.trim().split(' ');
+    if (parts.isEmpty) return '';
+    if (parts.length == 1) {
+      return parts[0].substring(0, 1).toUpperCase();
+    }
+    // Get first letter of first name and first letter of last name
+    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'.toUpperCase();
+  }
+
   Widget _buildUserCard(BuildContext context, Map<String, dynamic> user) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -326,6 +366,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     ];
     final colorIndex = user['name'].toString().hashCode % colors.length;
     final avatarColor = colors[colorIndex];
+    final speakerId = user['name'].toString().toLowerCase().replaceAll(' ', '_');
 
     return Container(
       decoration: BoxDecoration(
@@ -342,17 +383,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            Navigator.of(context).push(
+          onTap: () async {
+            await Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (context) => InsightDetailScreen(
                   userName: user['name'],
                   duration: user['duration'],
                   fileCount: user['fileCount'],
                   avatarColor: avatarColor,
+                  initialAvatarImagePath: _avatarCache[speakerId],
                 ),
               ),
             );
+            // Reload avatar profiles after returning
+            await _loadAvatarProfiles();
           },
           borderRadius: BorderRadius.circular(16),
           child: Padding(
@@ -363,36 +407,49 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 // Large circular avatar with gradient
                 Hero(
                   tag: 'avatar_${user['name']}',
-                  child: Container(
-                    width: 70,
-                    height: 70,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [
-                          Color.lerp(avatarColor, Colors.white, 0.3)!,
-                          avatarColor,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Container(
+                      width: 70,
+                      height: 70,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: _avatarCache[speakerId] == null
+                            ? LinearGradient(
+                                colors: [
+                                  Color.lerp(avatarColor, Colors.white, 0.3)!,
+                                  avatarColor,
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              )
+                            : null,
+                        image: _avatarCache[speakerId] != null
+                            ? DecorationImage(
+                                image: FileImage(File(_avatarCache[speakerId]!)),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
+                        boxShadow: [
+                          BoxShadow(
+                            color: avatarColor.withOpacity(0.4),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
                         ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: avatarColor.withOpacity(0.4),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: Text(
-                        user['name'].toString().substring(0, 1).toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
+                      child: _avatarCache[speakerId] == null
+                          ? Center(
+                              child: Text(
+                                _getInitials(user['name'].toString()),
+                                style: const TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            )
+                          : null,
                     ),
                   ),
                 ),

@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme.dart';
 import 'services/database_service.dart';
+import 'services/speaker_profile_service.dart';
 import 'providers/config_provider.dart';
 import 'providers/theme_provider.dart';
+import 'providers/speaker_profile_provider.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'screens/home/home_screen.dart';
 
@@ -21,11 +23,16 @@ void main() async {
   await databaseService.initialize();
   print('✅ [Main] Database initialized');
 
+  // Initialize speaker profile service
+  final speakerProfileService = SpeakerProfileService(prefs);
+  print('✅ [Main] Speaker profile service initialized');
+
   runApp(
     ProviderScope(
       overrides: [
         databaseServiceProvider.overrideWithValue(databaseService),
         themeProvider.overrideWith((ref) => ThemeNotifier(prefs)),
+        speakerProfileServiceProvider.overrideWithValue(speakerProfileService),
       ],
       child: const OrbiApp(),
     ),

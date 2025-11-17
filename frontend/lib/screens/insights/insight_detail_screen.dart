@@ -1,10 +1,16 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
+import '../../providers/speaker_profile_provider.dart';
+import '../../services/speaker_profile_service.dart';
 
-class InsightDetailScreen extends StatelessWidget {
+class InsightDetailScreen extends ConsumerStatefulWidget {
   final String userName;
   final String duration;
   final int fileCount;
   final Color avatarColor;
+  final String? initialAvatarImagePath;
 
   const InsightDetailScreen({
     super.key,
@@ -12,7 +18,142 @@ class InsightDetailScreen extends StatelessWidget {
     required this.duration,
     required this.fileCount,
     required this.avatarColor,
+    this.initialAvatarImagePath,
   });
+
+  @override
+  ConsumerState<InsightDetailScreen> createState() => _InsightDetailScreenState();
+}
+
+class _InsightDetailScreenState extends ConsumerState<InsightDetailScreen> {
+  late String _currentName;
+  String? _avatarImagePath;
+  final _nameController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _currentName = widget.userName;
+    _avatarImagePath = widget.initialAvatarImagePath;
+    _nameController.text = _currentName;
+    _loadProfile();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  String get _speakerId => widget.userName.toLowerCase().replaceAll(' ', '_');
+
+  String _getInitials(String name) {
+    final parts = name.trim().split(' ');
+    if (parts.isEmpty) return '';
+    if (parts.length == 1) {
+      return parts[0].substring(0, 1).toUpperCase();
+    }
+    // Get first letter of first name and first letter of last name
+    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'.toUpperCase();
+  }
+
+  Future<void> _loadProfile() async {
+    final service = ref.read(speakerProfileServiceProvider);
+    final profile = await service.getProfile(_speakerId);
+
+    if (profile != null) {
+      setState(() {
+        _currentName = profile.name;
+        _avatarImagePath = profile.avatarImagePath;
+        _nameController.text = _currentName;
+      });
+    } else {
+      // Create initial profile
+      final newProfile = SpeakerProfile(
+        id: _speakerId,
+        name: widget.userName,
+      );
+      await service.saveProfile(newProfile);
+    }
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        final imagePath = result.files.single.path!;
+        final service = ref.read(speakerProfileServiceProvider);
+        await service.updateSpeakerAvatar(_speakerId, imagePath);
+
+        setState(() {
+          _avatarImagePath = imagePath;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Avatar updated successfully')),
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ [InsightDetailScreen] Error picking image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating avatar: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _editName() async {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Speaker Name'),
+        content: TextField(
+          controller: _nameController,
+          decoration: const InputDecoration(
+            labelText: 'Speaker Name',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final newName = _nameController.text.trim();
+              if (newName.isNotEmpty && newName != _currentName) {
+                final service = ref.read(speakerProfileServiceProvider);
+                await service.updateSpeakerName(_speakerId, newName);
+
+                setState(() {
+                  _currentName = newName;
+                });
+
+                if (mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Name updated successfully')),
+                  );
+                }
+              } else {
+                Navigator.of(context).pop();
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,57 +186,108 @@ class InsightDetailScreen extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    avatarColor.withOpacity(0.1),
+                    widget.avatarColor.withOpacity(0.1),
                     Theme.of(context).colorScheme.surface,
                   ],
                 ),
               ),
               child: Column(
                 children: [
-                  // Hero Avatar
-                  Hero(
-                    tag: 'avatar_$userName',
-                    child: Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: [
-                            Color.lerp(avatarColor, Colors.white, 0.3)!,
-                            avatarColor,
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: avatarColor.withOpacity(0.4),
-                            blurRadius: 16,
-                            offset: const Offset(0, 4),
+                  // Hero Avatar with Edit Button
+                  Stack(
+                    children: [
+                      Hero(
+                        tag: 'avatar_${widget.userName}',
+                        child: Material(
+                          color: Colors.transparent,
+                          child: Container(
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: _avatarImagePath == null
+                                  ? LinearGradient(
+                                      colors: [
+                                        Color.lerp(widget.avatarColor, Colors.white, 0.3)!,
+                                        widget.avatarColor,
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    )
+                                  : null,
+                              image: _avatarImagePath != null
+                                  ? DecorationImage(
+                                      image: FileImage(File(_avatarImagePath!)),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: widget.avatarColor.withOpacity(0.4),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: _avatarImagePath == null
+                                ? Center(
+                                    child: Text(
+                                      _getInitials(_currentName),
+                                      style: const TextStyle(
+                                        fontSize: 48,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  )
+                                : null,
                           ),
-                        ],
+                        ),
                       ),
-                      child: Center(
-                        child: Text(
-                          userName.substring(0, 1).toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 48,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: Material(
+                          color: Theme.of(context).colorScheme.primary,
+                          shape: const CircleBorder(),
+                          elevation: 4,
+                          child: InkWell(
+                            onTap: _pickImage,
+                            customBorder: const CircleBorder(),
+                            child: const Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: Icon(
+                                Icons.camera_alt,
+                                size: 20,
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
                   const SizedBox(height: 16),
-                  // Speaker Name
-                  Text(
-                    userName,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                    textAlign: TextAlign.center,
+                  // Speaker Name with Edit Button
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        _currentName,
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: _editName,
+                        icon: const Icon(Icons.edit, size: 20),
+                        tooltip: 'Edit name',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -114,7 +306,7 @@ class InsightDetailScreen extends StatelessWidget {
                     context,
                     icon: Icons.access_time,
                     title: 'Total Duration',
-                    value: duration,
+                    value: widget.duration,
                     color: Colors.blue,
                   ),
                   const SizedBox(height: 16),
@@ -124,7 +316,7 @@ class InsightDetailScreen extends StatelessWidget {
                     context,
                     icon: Icons.audio_file,
                     title: 'Audio Files',
-                    value: '$fileCount files',
+                    value: '${widget.fileCount} files',
                     color: Colors.green,
                   ),
                   const SizedBox(height: 32),
