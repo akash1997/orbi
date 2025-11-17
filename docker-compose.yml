@@ -1,0 +1,115 @@
+services:
+  # Redis for Celery broker and result backend
+  redis:
+    image: redis:7-alpine
+    container_name: orbi-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - orbi-network
+
+  # FastAPI application
+  api:
+    build:
+      context: ./be
+      dockerfile: Dockerfile
+    container_name: orbi-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./be/.env
+    environment:
+      - DATABASE_URL=sqlite:////app/data/orbi.db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - UPLOAD_DIR=/app/data/recordings
+      - MODELS_CACHE_DIR=/app/data/models_cache
+      - VECTOR_DB_PATH=/app/data/speaker_embeddings
+    volumes:
+      - ./be:/app
+      - orbi-data:/app/data
+      - orbi-models:/app/data/models_cache
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - orbi-network
+
+  # Celery worker for async processing
+  worker:
+    build:
+      context: ./be
+      dockerfile: Dockerfile
+    container_name: orbi-worker
+    restart: unless-stopped
+    env_file:
+      - ./be/.env
+    environment:
+      - DATABASE_URL=sqlite:////app/data/orbi.db
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - UPLOAD_DIR=/app/data/recordings
+      - MODELS_CACHE_DIR=/app/data/models_cache
+      - VECTOR_DB_PATH=/app/data/speaker_embeddings
+    volumes:
+      - ./be:/app
+      - orbi-data:/app/data
+      - orbi-models:/app/data/models_cache
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    command: celery -A celery_app worker --loglevel=info --concurrency=2
+    networks:
+      - orbi-network
+
+  # Celery Flower for monitoring (optional)
+  flower:
+    build:
+      context: ./be
+      dockerfile: Dockerfile
+    container_name: orbi-flower
+    restart: unless-stopped
+    ports:
+      - "5555:5555"
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+      - worker
+    command: celery -A celery_app flower --port=5555
+    networks:
+      - orbi-network
+
+networks:
+  orbi-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local
+  orbi-data:
+    driver: local
+  orbi-models:
+    driver: local

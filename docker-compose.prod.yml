@@ -1,0 +1,66 @@
+# Production configuration for Orbi
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  redis:
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+
+  api:
+    restart: always
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+      replicas: 2
+    environment:
+      - DEBUG=False
+    volumes:
+      # Don't mount source code in production
+      - orbi-data:/app/data
+      - orbi-models:/app/data/models_cache
+
+  worker:
+    restart: always
+    command: celery -A celery_app worker --loglevel=warning --concurrency=4 --max-tasks-per-child=100
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+      replicas: 2
+    volumes:
+      - orbi-data:/app/data
+      - orbi-models:/app/data/models_cache
+
+  flower:
+    restart: always
+    environment:
+      - FLOWER_BASIC_AUTH=admin:${FLOWER_PASSWORD:-changeme}
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # Nginx reverse proxy (optional for production)
+  nginx:
+    image: nginx:alpine
+    container_name: orbi-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - api
+    networks:
+      - orbi-network
