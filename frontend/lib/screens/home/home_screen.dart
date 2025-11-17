@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/config_provider.dart';
 import '../../providers/file_monitor_provider.dart';
 import '../../widgets/drawer_3d.dart';
+import '../insights/insight_detail_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluttertoast/fluttertoast.dart';
@@ -148,14 +149,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         Theme.of(context).colorScheme.primaryContainer.withOpacity(0.7),
                         _gradientAnimation.value,
                       )!,
-                      Color.lerp(
-                        Theme.of(context).colorScheme.primaryContainer.withOpacity(0.2),
-                        Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                        _gradientAnimation.value,
-                      )!,
                       Theme.of(context).colorScheme.surface,
                     ],
-                    stops: const [0.0, 0.5, 1.0],
+                    stops: const [0.0,  1.0],
                   ),
                 ),
                 child: Column(
@@ -179,7 +175,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             ),
                             SliverPadding(
                               padding: const EdgeInsets.all(16.0),
-                              sliver: _buildUserGrid(context, isLoading: true),
+                              sliver: _buildUserGrid(context, isLoading: false),
                             ),
                           ],
                         ),
@@ -200,15 +196,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       return _buildShimmerGrid(context);
     }
 
-    // TODO: Replace with actual user data
-    final mockUsers = List.generate(
-      10,
-      (index) => {
-        'name': 'User ${index + 1}',
-        'duration': '${(index + 1) * 2}h ${(index + 1) * 15}m',
-        'fileCount': (index + 1) * 3,
-      },
-    );
+    // Mock data for demo purposes
+    final mockUsers = [
+      {'name': 'Alice Johnson', 'duration': '2h 45m', 'fileCount': 8},
+      {'name': 'Bob Smith', 'duration': '1h 30m', 'fileCount': 5},
+      {'name': 'Carol Davis', 'duration': '3h 15m', 'fileCount': 12},
+      {'name': 'David Wilson', 'duration': '45m', 'fileCount': 3},
+      {'name': 'Emma Brown', 'duration': '2h 20m', 'fileCount': 7},
+      {'name': 'Frank Miller', 'duration': '1h 50m', 'fileCount': 6},
+      {'name': 'Grace Lee', 'duration': '4h 10m', 'fileCount': 15},
+      {'name': 'Henry Taylor', 'duration': '1h 15m', 'fileCount': 4},
+      {'name': 'Iris Anderson', 'duration': '3h 30m', 'fileCount': 11},
+      {'name': 'Jack Thomas', 'duration': '2h 5m', 'fileCount': 9},
+    ];
 
     return SliverGrid(
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -343,8 +343,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
-            // TODO: Navigate to user detail screen
-            print('Tapped on ${user['name']}');
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => InsightDetailScreen(
+                  userName: user['name'],
+                  duration: user['duration'],
+                  fileCount: user['fileCount'],
+                  avatarColor: avatarColor,
+                ),
+              ),
+            );
           },
           borderRadius: BorderRadius.circular(16),
           child: Padding(
@@ -353,34 +361,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Large circular avatar with gradient
-                Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [
-                        avatarColor.shade300,
-                        avatarColor.shade600,
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: avatarColor.withOpacity(0.4),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
+                Hero(
+                  tag: 'avatar_${user['name']}',
+                  child: Container(
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [
+                          Color.lerp(avatarColor, Colors.white, 0.3)!,
+                          avatarColor,
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Text(
-                      user['name'].toString().substring(0, 1).toUpperCase(),
-                      style: const TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: avatarColor.withOpacity(0.4),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        user['name'].toString().substring(0, 1).toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),
