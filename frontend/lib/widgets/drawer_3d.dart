@@ -115,13 +115,10 @@ class Drawer3DState extends State<Drawer3D>
   }
 
   void toggleDrawer() {
-    print('🔄 [Drawer3D] toggleDrawer called, current value: ${_animationController.value}');
     if (_animationController.value < 0.5) {
-      print('📖 [Drawer3D] Opening drawer');
       _animationController.forward();
       _drawerVisible = true;
     } else {
-      print('📕 [Drawer3D] Closing drawer');
       _animationController.reverse();
       _drawerVisible = false;
     }
@@ -157,7 +154,6 @@ class Drawer3DState extends State<Drawer3D>
           animation: _animator,
           builder: (context, widget) {
             final isOpen = _animator.value >= 0.2;
-            print('🎯 [Drawer3D] Drawer animation value: ${_animator.value}, isOpen: $isOpen');
             return Transform.translate(
               offset: Offset(_maxSlide * (_animator.value - 1), 0),
               child: Transform(
@@ -393,10 +389,7 @@ class Drawer3DState extends State<Drawer3D>
                     width: 50,
                     height: 50,
                     child: IconButton(
-                      onPressed: () {
-                        print('🍔 [Drawer3D] Menu button pressed');
-                        toggleDrawer();
-                      },
+                      onPressed: toggleDrawer,
                       icon: const Icon(Icons.menu),
                     ),
                   ),
@@ -422,7 +415,6 @@ class Drawer3DState extends State<Drawer3D>
           animation: _animator,
           builder: (_, widget) {
             final ignoreOverlay = _animator.value > 0.0;
-            print('🎭 [Drawer3D] Overlay ignoring: $ignoreOverlay (animator: ${_animator.value})');
             return IgnorePointer(
               ignoring: ignoreOverlay,
               child: Opacity(

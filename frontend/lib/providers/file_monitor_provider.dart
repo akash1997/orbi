@@ -85,28 +85,34 @@ class FileMonitorNotifier extends StateNotifier<FileMonitorState> {
 
   void _handleFileDetected(AudioFileModel audioFile) {
     print('📥 [FileMonitorProvider] File detected: ${audioFile.fileName}');
+    print('📥 [FileMonitorProvider] Time: ${DateTime.now().toIso8601String()}');
 
     // Add to detected files list
     final updatedFiles = [...state.detectedFiles, audioFile];
     state = state.copyWith(detectedFiles: updatedFiles);
 
-    // Upload file
+    // Upload file immediately (don't await to not block detection)
+    print('📤 [FileMonitorProvider] Triggering immediate upload for: ${audioFile.fileName}');
     _uploadFile(audioFile);
   }
 
   Future<void> _uploadFile(AudioFileModel audioFile) async {
     try {
-      print('📤 [FileMonitorProvider] Uploading: ${audioFile.fileName}');
+      print('📤 [FileMonitorProvider] Starting upload: ${audioFile.fileName}');
+      print('📤 [FileMonitorProvider] Upload time: ${DateTime.now().toIso8601String()}');
       final file = File(audioFile.filePath);
 
       if (await file.exists()) {
+        print('📤 [FileMonitorProvider] File exists, calling API...');
         await _apiService.uploadAudioFile(file);
         print('✅ [FileMonitorProvider] Upload completed for: ${audioFile.fileName}');
+        print('✅ [FileMonitorProvider] Completion time: ${DateTime.now().toIso8601String()}');
       } else {
         print('❌ [FileMonitorProvider] File not found: ${audioFile.filePath}');
       }
     } catch (e) {
       print('❌ [FileMonitorProvider] Upload error: $e');
+      print('❌ [FileMonitorProvider] Error time: ${DateTime.now().toIso8601String()}');
       // Don't update error state for upload failures in Phase 1
       // We expect uploads to fail since backend is not ready
     }
