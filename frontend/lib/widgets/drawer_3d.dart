@@ -3,10 +3,16 @@ import 'package:flutter/material.dart';
 
 class Drawer3D extends StatefulWidget {
   final Widget child;
+  final bool isMonitoring;
+  final String monitoredFolderPath;
+  final VoidCallback? onChangeFolderTap;
 
   const Drawer3D({
     super.key,
     required this.child,
+    required this.isMonitoring,
+    required this.monitoredFolderPath,
+    this.onChangeFolderTap,
   });
 
   @override
@@ -219,7 +225,28 @@ class Drawer3DState extends State<Drawer3D>
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 32),
+                            const SizedBox(height: 24),
+
+                            // Monitoring Status Card
+                            _buildStatusCard(context),
+                            const SizedBox(height: 24),
+
+                            const Divider(),
+                            const SizedBox(height: 16),
+
+                            // Change Folder Option
+                            _buildSettingTile(
+                              context,
+                              icon: Icons.folder,
+                              title: 'Change Folder',
+                              subtitle: 'Modify monitored folder',
+                              enabled: true,
+                              onTap: widget.onChangeFolderTap,
+                            ),
+
+                            const SizedBox(height: 16),
+                            const Divider(),
+                            const SizedBox(height: 24),
 
                             // Phase 2 Settings
                             Text(
@@ -235,13 +262,6 @@ class Drawer3DState extends State<Drawer3D>
                             ),
                             const SizedBox(height: 16),
 
-                            _buildSettingTile(
-                              context,
-                              icon: Icons.folder,
-                              title: 'Change Folder',
-                              subtitle: 'Modify monitored folder',
-                              enabled: false,
-                            ),
                             _buildSettingTile(
                               context,
                               icon: Icons.notifications,
@@ -282,6 +302,7 @@ class Drawer3DState extends State<Drawer3D>
     String? subtitle,
     Widget? trailing,
     bool enabled = true,
+    VoidCallback? onTap,
   }) {
     return Opacity(
       opacity: enabled ? 1.0 : 0.5,
@@ -292,7 +313,69 @@ class Drawer3DState extends State<Drawer3D>
         trailing: trailing,
         contentPadding: const EdgeInsets.symmetric(vertical: 4),
         enabled: enabled,
-        onTap: enabled && trailing == null ? () {} : null,
+        onTap: enabled ? onTap : null,
+      ),
+    );
+  }
+
+  Widget _buildStatusCard(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: widget.isMonitoring
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.outline,
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: widget.isMonitoring ? Colors.green : Colors.grey,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  widget.isMonitoring ? 'Monitoring Active' : 'Monitoring Inactive',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Icon(
+                Icons.folder,
+                size: 16,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  widget.monitoredFolderPath,
+                  style: Theme.of(context).textTheme.bodySmall,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 2,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -357,7 +440,7 @@ class Drawer3DState extends State<Drawer3D>
               ),
             );
           },
-          child: this.widget.child,
+          child: widget.child,
         ),
       );
 }

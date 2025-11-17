@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/config_provider.dart';
 import '../../providers/file_monitor_provider.dart';
-import '../../providers/theme_provider.dart';
 import '../../widgets/drawer_3d.dart';
 import 'package:intl/intl.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -35,13 +36,67 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  Future<void> _onChangeFolderTap(BuildContext context) async {
+    try {
+      // Close drawer first
+      _drawerKey.currentState?.toggleDrawer();
+
+      // Show folder picker
+      print('📁 [HomeScreen] Opening folder picker');
+      String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+
+      if (selectedDirectory != null) {
+        print('📁 [HomeScreen] Folder selected: $selectedDirectory');
+
+        // Stop monitoring first
+        await ref.read(fileMonitorProvider.notifier).stopMonitoring();
+
+        // Update config with new folder
+        await ref.read(configProvider.notifier).updateFolderPath(selectedDirectory);
+
+        // Start monitoring with new folder
+        await ref.read(fileMonitorProvider.notifier).startMonitoring(selectedDirectory);
+
+        print('✅ [HomeScreen] Folder changed successfully to: $selectedDirectory');
+
+        // Show success toast
+        Fluttertoast.showToast(
+          msg: "Folder changed successfully!",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+          fontSize: 16.0,
+        );
+      } else {
+        print('⏭️  [HomeScreen] Folder selection cancelled');
+      }
+    } catch (e) {
+      print('❌ [HomeScreen] Error changing folder: $e');
+
+      // Show error toast
+      Fluttertoast.showToast(
+        msg: "Error changing folder: $e",
+        toastLength: Toast.LENGTH_LONG,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+        fontSize: 16.0,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final configAsync = ref.watch(configProvider);
     final fileMonitorState = ref.watch(fileMonitorProvider);
+    final config = configAsync.value;
 
     return Drawer3D(
       key: _drawerKey,
+      isMonitoring: fileMonitorState.isMonitoring,
+      monitoredFolderPath: config?.monitoredFolderPath ?? 'No folder selected',
+      onChangeFolderTap: () => _onChangeFolderTap(context),
       child: configAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) => Center(
@@ -72,15 +127,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   children: [
                     const SizedBox(height: 80), // Space for header
 
-                    // Monitoring Status Card
-                    _buildStatusCard(
-                      context,
-                      fileMonitorState.isMonitoring,
-                      config.monitoredFolderPath,
-                    ),
-
-                    const SizedBox(height: 16),
-
                     // Detected Files Section
                     _buildDetectedFilesSection(
                       context,
@@ -92,91 +138,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           );
         },
-      ),
-    );
-  }
-
-  Widget _buildStatusCard(
-    BuildContext context,
-    bool isMonitoring,
-    String folderPath,
-  ) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isMonitoring ? Colors.green : Colors.grey,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  isMonitoring ? 'Monitoring Active' : 'Monitoring Inactive',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Icon(
-                  Icons.folder,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    folderPath,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (isMonitoring)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.check_circle,
-                      size: 16,
-                      color: Colors.green.shade700,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Listening for new audio files',
-                      style: TextStyle(
-                        color: Colors.green.shade700,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }
