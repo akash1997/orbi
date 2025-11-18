@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import '../core/constants.dart';
+import '../models/speaker_model.dart';
 
 class ApiService {
   final Dio _dio;
@@ -43,6 +44,46 @@ class ApiService {
       // This allows testing without backend
     } catch (e) {
       print('❌ [API] Unexpected error: $e');
+    }
+  }
+
+  /// Fetch all speakers from the backend
+  Future<List<Speaker>> fetchSpeakers({int limit = 100, int offset = 0}) async {
+    try {
+      print('🔍 [API] Fetching speakers from: ${AppConstants.baseUrl}/speakers');
+      print('🔍 [API] Query params - limit: $limit, offset: $offset');
+
+      final response = await _dio.get(
+        '/speakers',
+        queryParameters: {
+          'limit': limit,
+          'offset': offset,
+        },
+      );
+
+      print('✅ [API] Response Status: ${response.statusCode}');
+      print('✅ [API] Response Headers: ${response.headers}');
+      print('✅ [API] Response Data: ${response.data}');
+      print('✅ [API] Speakers fetched successfully! Count: ${(response.data as List).length}');
+
+      final List<dynamic> speakersJson = response.data as List;
+      final speakers = speakersJson.map((json) => Speaker.fromJson(json as Map<String, dynamic>)).toList();
+
+      print('✅ [API] Parsed speakers:');
+      for (var speaker in speakers) {
+        print('   - ${speaker.name} (${speaker.speakerId}): ${speaker.fileCount} files, ${speaker.getFormattedDuration()}');
+      }
+
+      return speakers;
+    } on DioException catch (e) {
+      print('❌ [API] Failed to fetch speakers: ${e.type}');
+      print('❌ [API] Error message: ${e.message}');
+      print('❌ [API] Response data: ${e.response?.data}');
+      print('❌ [API] Status code: ${e.response?.statusCode}');
+      rethrow;
+    } catch (e) {
+      print('❌ [API] Unexpected error fetching speakers: $e');
+      rethrow;
     }
   }
 }

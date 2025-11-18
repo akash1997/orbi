@@ -10,6 +10,8 @@ import '../recordings/recordings_screen.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shimmer/shimmer.dart';
+import '../../services/api_service.dart';
+import '../../models/speaker_model.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -25,6 +27,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   late Animation<double> _gradientAnimation;
   final Map<String, String?> _avatarCache = {};
   final Map<String, String> _nameCache = {};
+  final ApiService _apiService = ApiService();
+  List<Speaker>? _speakers;
+  bool _isLoadingSpeakers = false;
+  String? _speakersError;
 
   @override
   void initState() {
@@ -47,7 +53,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // Start monitoring when home screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startMonitoring();
-      _loadAvatarProfiles();
+      _fetchSpeakers();
     });
   }
 
@@ -67,31 +73,97 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
   }
 
-  Future<void> _loadAvatarProfiles() async {
-    final mockUsers = [
-      {'name': 'Alice Johnson', 'duration': '2h 45m', 'fileCount': 8},
-      {'name': 'Bob Smith', 'duration': '1h 30m', 'fileCount': 5},
-      {'name': 'Carol Davis', 'duration': '3h 15m', 'fileCount': 12},
-      {'name': 'David Wilson', 'duration': '45m', 'fileCount': 3},
-      {'name': 'Emma Brown', 'duration': '2h 20m', 'fileCount': 7},
-      {'name': 'Frank Miller', 'duration': '1h 50m', 'fileCount': 6},
-      {'name': 'Grace Lee', 'duration': '4h 10m', 'fileCount': 15},
-      {'name': 'Henry Taylor', 'duration': '1h 15m', 'fileCount': 4},
-      {'name': 'Iris Anderson', 'duration': '3h 30m', 'fileCount': 11},
-      {'name': 'Jack Thomas', 'duration': '2h 5m', 'fileCount': 9},
-    ];
+  Future<void> _fetchSpeakers() async {
+    setState(() {
+      _isLoadingSpeakers = true;
+      _speakersError = null;
+    });
 
+    try {
+      print('🔍 [HomeScreen] Fetching speakers from API');
+      final speakers = await _apiService.fetchSpeakers();
+
+      print('✅ [HomeScreen] Received ${speakers.length} speakers');
+
+      if (mounted) {
+        setState(() {
+          _speakers = speakers;
+          _isLoadingSpeakers = false;
+        });
+
+        // Load avatar profiles for each speaker
+        await _loadAvatarProfiles(speakers);
+      }
+    } catch (e) {
+      print('❌ [HomeScreen] Error fetching speakers: $e');
+
+      if (mounted) {
+        setState(() {
+          _speakersError = e.toString();
+          _isLoadingSpeakers = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadAvatarProfiles(List<Speaker> speakers) async {
     final service = ref.read(speakerProfileServiceProvider);
-    for (var user in mockUsers) {
-      final originalName = user['name'].toString();
-      final speakerId = originalName.toLowerCase().replaceAll(' ', '_');
+    for (var speaker in speakers) {
+      final speakerId = speaker.speakerId;
       final profile = await service.getProfile(speakerId);
       if (mounted) {
         setState(() {
           _avatarCache[speakerId] = profile?.avatarImagePath;
-          // Cache the updated name from profile, or use original if no profile
-          _nameCache[speakerId] = profile?.name ?? originalName;
+          // Cache the updated name from profile, or use speaker name
+          _nameCache[speakerId] = profile?.name ?? speaker.name;
         });
+      }
+    }
+  }
+
+  Future<void> _refreshSpeakers() async {
+    try {
+      print('🔄 [HomeScreen] Refreshing speakers from API');
+      final speakers = await _apiService.fetchSpeakers();
+
+      print('✅ [HomeScreen] Refresh: Received ${speakers.length} speakers');
+
+      if (mounted) {
+        setState(() {
+          _speakers = speakers;
+          _speakersError = null;
+        });
+
+        // Load avatar profiles for each speaker
+        await _loadAvatarProfiles(speakers);
+
+        // Show success toast
+        Fluttertoast.showToast(
+          msg: "Refreshed! Found ${speakers.length} speaker${speakers.length == 1 ? '' : 's'}",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+          fontSize: 16.0,
+        );
+      }
+    } catch (e) {
+      print('❌ [HomeScreen] Error refreshing speakers: $e');
+
+      if (mounted) {
+        setState(() {
+          _speakersError = e.toString();
+        });
+
+        // Show error toast
+        Fluttertoast.showToast(
+          msg: "Failed to refresh speakers",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+          fontSize: 16.0,
+        );
       }
     }
   }
@@ -207,6 +279,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     Expanded(
                       child: RefreshIndicator(
                         onRefresh: () async {
+                          // Refresh speakers from API
+                          await _refreshSpeakers();
+
+                          // Also restart file monitoring
                           await ref
                               .read(fileMonitorProvider.notifier)
                               .stopMonitoring();
@@ -239,23 +315,71 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 
   Widget _buildUserGrid(BuildContext context, {required bool isLoading}) {
-    if (isLoading) {
+    if (_isLoadingSpeakers || isLoading) {
       return _buildShimmerGrid(context);
     }
 
-    // Mock data for demo purposes
-    final mockUsers = [
-      {'name': 'Alice Johnson', 'duration': '2h 45m', 'fileCount': 8},
-      {'name': 'Bob Smith', 'duration': '1h 30m', 'fileCount': 5},
-      {'name': 'Carol Davis', 'duration': '3h 15m', 'fileCount': 12},
-      {'name': 'David Wilson', 'duration': '45m', 'fileCount': 3},
-      {'name': 'Emma Brown', 'duration': '2h 20m', 'fileCount': 7},
-      {'name': 'Frank Miller', 'duration': '1h 50m', 'fileCount': 6},
-      {'name': 'Grace Lee', 'duration': '4h 10m', 'fileCount': 15},
-      {'name': 'Henry Taylor', 'duration': '1h 15m', 'fileCount': 4},
-      {'name': 'Iris Anderson', 'duration': '3h 30m', 'fileCount': 11},
-      {'name': 'Jack Thomas', 'duration': '2h 5m', 'fileCount': 9},
-    ];
+    // Show error if speakers failed to load
+    if (_speakersError != null) {
+      return SliverToBoxAdapter(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                const SizedBox(height: 16),
+                Text(
+                  'Failed to load speakers',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _speakersError!,
+                  style: Theme.of(context).textTheme.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: _fetchSpeakers,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Show empty state if no speakers
+    if (_speakers == null || _speakers!.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.people_outline, size: 64, color: Colors.grey),
+                const SizedBox(height: 16),
+                Text(
+                  'No speakers found',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Upload audio files to see speaker insights',
+                  style: Theme.of(context).textTheme.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return SliverGrid(
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -266,10 +390,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ),
       delegate: SliverChildBuilderDelegate(
         (context, index) {
-          final user = mockUsers[index];
-          return _buildUserCard(context, user);
+          final speaker = _speakers![index];
+          return _buildSpeakerCard(context, speaker);
         },
-        childCount: mockUsers.length,
+        childCount: _speakers!.length,
       ),
     );
   }
@@ -367,10 +491,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'.toUpperCase();
   }
 
-  Widget _buildUserCard(BuildContext context, Map<String, dynamic> user) {
+  Widget _buildSpeakerCard(BuildContext context, Speaker speaker) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Generate a color based on the user's name for visual variety
+    // Generate a color based on the speaker's name for visual variety
     final colors = [
       Colors.blue,
       Colors.purple,
@@ -381,9 +505,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       Colors.cyan,
       Colors.amber,
     ];
-    final colorIndex = user['name'].toString().hashCode % colors.length;
+    final displayName = _nameCache[speaker.speakerId] ?? speaker.name;
+    final colorIndex = displayName.hashCode % colors.length;
     final avatarColor = colors[colorIndex];
-    final speakerId = user['name'].toString().toLowerCase().replaceAll(' ', '_');
+    final speakerId = speaker.speakerId;
 
     return Container(
       decoration: BoxDecoration(
@@ -404,16 +529,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             await Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (context) => InsightDetailScreen(
-                  userName: user['name'],
-                  duration: user['duration'],
-                  fileCount: user['fileCount'],
+                  userName: displayName,
+                  duration: speaker.getFormattedDuration(),
+                  fileCount: speaker.fileCount,
                   avatarColor: avatarColor,
                   initialAvatarImagePath: _avatarCache[speakerId],
                 ),
               ),
             );
-            // Reload avatar profiles after returning
-            await _loadAvatarProfiles();
+            // Reload speakers after returning
+            await _fetchSpeakers();
           },
           borderRadius: BorderRadius.circular(16),
           child: Padding(
@@ -423,7 +548,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               children: [
                 // Large circular avatar with gradient
                 Hero(
-                  tag: 'avatar_${user['name']}',
+                  tag: 'avatar_$displayName',
                   child: Material(
                     color: Colors.transparent,
                     child: Container(
@@ -458,7 +583,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       child: _avatarCache[speakerId] == null
                           ? Center(
                               child: Text(
-                                _getInitials(_nameCache[speakerId] ?? user['name'].toString()),
+                                _getInitials(displayName),
                                 style: const TextStyle(
                                   fontSize: 32,
                                   fontWeight: FontWeight.bold,
@@ -471,9 +596,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                 ),
                 const SizedBox(height: 12),
-                // Name with better typography (use cached name if available)
+                // Name with better typography
                 Text(
-                  _nameCache[speakerId] ?? user['name'],
+                  displayName,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.2,
@@ -494,7 +619,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      user['duration'],
+                      speaker.getFormattedDuration(),
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Theme.of(context).colorScheme.primary,
                             fontWeight: FontWeight.w500,
@@ -511,7 +636,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    '${user['fileCount']} files',
+                    '${speaker.fileCount} files',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSecondaryContainer,
                           fontSize: 11,

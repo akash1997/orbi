@@ -1,6 +1,6 @@
 class AppConstants {
-  // API
-  static const String baseUrl = 'http://localhost:8000';
+  // API - Use local IP address to allow mobile device access
+  static const String baseUrl = 'http://10.206.160.115:8000';
   static const String uploadEndpoint = '/upload';
 
   // Audio Extensions
