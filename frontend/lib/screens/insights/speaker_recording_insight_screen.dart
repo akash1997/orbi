@@ -22,17 +22,28 @@ class SpeakerRecordingInsightScreen extends StatefulWidget {
 }
 
 class _SpeakerRecordingInsightScreenState
-    extends State<SpeakerRecordingInsightScreen> {
+    extends State<SpeakerRecordingInsightScreen> with SingleTickerProviderStateMixin {
   final ApiService _apiService = ApiService();
   RecordingDetail? _recordingDetail;
   RecordingSpeaker? _speakerData;
   bool _isLoading = true;
   String? _error;
+  late AnimationController _animationController;
 
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
     _loadRecordingInsights();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadRecordingInsights() async {
@@ -60,6 +71,9 @@ class _SpeakerRecordingInsightScreenState
         });
 
         print('✅ [SpeakerRecordingInsight] Loaded insights for ${widget.speakerName}');
+
+        // Start animation after data is loaded
+        _animationController.forward();
       }
     } catch (e) {
       print('❌ [SpeakerRecordingInsight] Error: $e');
@@ -159,79 +173,161 @@ class _SpeakerRecordingInsightScreenState
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 // Recording info subtitle
-                Text(
-                  _recordingDetail!.filename,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                      ),
-                  textAlign: TextAlign.center,
+                _buildAnimatedItem(
+                  index: 0,
+                  child: Text(
+                    _recordingDetail!.filename,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
                 const SizedBox(height: 32),
 
                 // Large Circular Progress
-                _buildCircularProgress(
-                  context,
-                  percentage: percentage,
-                  label: 'Speaking Time',
+                _buildAnimatedItem(
+                  index: 1,
+                  child: _buildCircularProgress(
+                    context,
+                    percentage: percentage,
+                    label: 'Speaking Time',
+                  ),
                 ),
                 const SizedBox(height: 32),
 
-                // Two Metric Cards
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildMetricCard(
-                        context,
-                        icon: Icons.message,
-                        label: 'Segments',
-                        value: '${_speakerData!.segmentCount}',
-                        color: Colors.purple,
+                // First Row - Segments and Speaking Pace
+                _buildAnimatedItem(
+                  index: 2,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildMetricCard(
+                          context,
+                          icon: Icons.message,
+                          label: 'Segments',
+                          value: '${_speakerData!.segmentCount}',
+                          color: Colors.purple,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildMetricCard(
-                        context,
-                        icon: Icons.speed,
-                        label: 'Speaking Pace',
-                        value: '${insights.speakingPace.toStringAsFixed(0)} wpm',
-                        color: Colors.orange,
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildMetricCard(
+                          context,
+                          icon: Icons.speed,
+                          label: 'Speaking Pace',
+                          value: '${insights.speakingPace.toStringAsFixed(0)} wpm',
+                          color: Colors.orange,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Second Row - Word Count and Filler Words
+                _buildAnimatedItem(
+                  index: 3,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildMetricCard(
+                          context,
+                          icon: Icons.text_fields,
+                          label: 'Word Count',
+                          value: '${insights.wordCount}',
+                          color: Colors.green,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildMetricCard(
+                          context,
+                          icon: Icons.warning_amber_rounded,
+                          label: 'Filler Words',
+                          value: '${insights.fillerWordsCount}',
+                          color: Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 24),
 
                 // Insights Card
-                _buildInsightsCard(context, insights),
+                _buildAnimatedItem(
+                  index: 4,
+                  child: _buildInsightsCard(context, insights),
+                ),
                 const SizedBox(height: 24),
 
                 // Improvements Card
                 if (insights.improvements.isNotEmpty) ...[
-                  _buildImprovementsCard(context, insights),
+                  _buildAnimatedItem(
+                    index: 5,
+                    child: _buildImprovementsCard(context, insights),
+                  ),
                   const SizedBox(height: 24),
                 ],
 
                 // View Full Transcript Button
-                _buildViewTranscriptButton(context),
+                _buildAnimatedItem(
+                  index: 6,
+                  child: _buildViewTranscriptButton(context),
+                ),
                 const SizedBox(height: 32),
 
                 // Segments Section
-                Text(
-                  'Transcript',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                _buildAnimatedItem(
+                  index: 7,
+                  child: Text(
+                    'Transcript',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
                 ),
                 const SizedBox(height: 16),
 
                 // Segments List
-                ..._speakerData!.segments.map((segment) => _buildSegmentCard(context, segment)),
+                ..._speakerData!.segments.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final segment = entry.value;
+                  return _buildAnimatedItem(
+                    index: 8 + index,
+                    child: _buildSegmentCard(context, segment),
+                  );
+                }),
               ],
             ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildAnimatedItem({required int index, required Widget child}) {
+    final delay = index * 0.1; // 100ms delay between each item
+    final animation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Interval(
+          delay.clamp(0.0, 0.8),
+          (delay + 0.2).clamp(0.2, 1.0),
+          curve: Curves.easeOut,
+        ),
+      ),
+    );
+
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.1),
+          end: Offset.zero,
+        ).animate(animation),
+        child: child,
+      ),
     );
   }
 
@@ -377,19 +473,32 @@ class _SpeakerRecordingInsightScreenState
                       ),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: sentimentColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  insights.sentiment.toUpperCase(),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: sentimentColor,
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: sentimentColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      insights.sentiment.toUpperCase(),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: sentimentColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Score: ${(insights.sentimentScore * 100).toStringAsFixed(0)}%',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                          fontSize: 11,
+                        ),
+                  ),
+                ],
               ),
             ],
           ),
