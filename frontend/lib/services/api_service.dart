@@ -13,8 +13,9 @@ class ApiService {
   ApiService()
       : _dio = Dio(BaseOptions(
           baseUrl: AppConstants.baseUrl,
-          connectTimeout: const Duration(seconds: 30),
-          receiveTimeout: const Duration(seconds: 30),
+          connectTimeout: const Duration(minutes: 5),
+          receiveTimeout: const Duration(minutes: 10),
+          sendTimeout: const Duration(minutes: 5),
         ));
 
   /// Upload audio file to backend and get job ID
@@ -102,14 +103,33 @@ class ApiService {
 
       return speakers;
     } on DioException catch (e) {
+      // Handle connection timeout specifically
+      if (e.type == DioExceptionType.connectionTimeout ||
+          e.type == DioExceptionType.receiveTimeout ||
+          e.type == DioExceptionType.sendTimeout) {
+        print('❌ [API] Connection timeout - server may be offline');
+        print('💡 [API] Make sure the backend server is running at ${AppConstants.baseUrl}');
+        // Return empty list instead of throwing to prevent app crash
+        return [];
+      }
+
+      // Handle connection errors
+      if (e.type == DioExceptionType.connectionError) {
+        print('❌ [API] Connection error - cannot reach server at ${AppConstants.baseUrl}');
+        print('💡 [API] Check if the backend server is running and accessible');
+        return [];
+      }
+
       print('❌ [API] Failed to fetch speakers: ${e.type}');
       print('❌ [API] Error message: ${e.message}');
       print('❌ [API] Response data: ${e.response?.data}');
       print('❌ [API] Status code: ${e.response?.statusCode}');
-      rethrow;
+
+      // For other errors, return empty list to prevent crash
+      return [];
     } catch (e) {
       print('❌ [API] Unexpected error fetching speakers: $e');
-      rethrow;
+      return [];
     }
   }
 
