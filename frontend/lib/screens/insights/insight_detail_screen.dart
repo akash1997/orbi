@@ -7,6 +7,7 @@ import '../../providers/speaker_profile_provider.dart';
 import '../../services/speaker_profile_service.dart';
 import '../../services/api_service.dart';
 import '../../models/speaker_model.dart';
+import 'speaker_recording_insight_screen.dart';
 
 class InsightDetailScreen extends ConsumerStatefulWidget {
   final String speakerId;
@@ -855,11 +856,14 @@ class _InsightDetailScreenState extends ConsumerState<InsightDetailScreen> {
   }
 
   void _navigateToRecordingInsights(String audioFileId) {
-    // TODO: Implement navigation to recording insights when the feature is ready
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Recording: $audioFileId'),
-        duration: const Duration(seconds: 2),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => SpeakerRecordingInsightScreen(
+          audioFileId: audioFileId,
+          speakerId: widget.speakerId,
+          speakerName: _currentName,
+          avatarColor: widget.avatarColor,
+        ),
       ),
     );
   }

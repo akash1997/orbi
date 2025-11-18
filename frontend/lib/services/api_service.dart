@@ -4,6 +4,7 @@ import '../core/constants.dart';
 import '../models/speaker_model.dart';
 import '../models/upload_response.dart';
 import '../models/job_status.dart';
+import '../models/recording_model.dart';
 
 class ApiService {
   final Dio _dio;
@@ -135,6 +136,26 @@ class ApiService {
       rethrow;
     } catch (e) {
       print('❌ [API] Unexpected error fetching speaker: $e');
+      rethrow;
+    }
+  }
+
+  /// Fetch recording details by audio file ID
+  Future<RecordingDetail> fetchRecordingDetails(String audioFileId) async {
+    try {
+      print('🔍 [API] Fetching recording details for: $audioFileId');
+
+      final response = await _dio.get('/recordings/$audioFileId');
+
+      print('✅ [API] Recording details fetched successfully');
+      return RecordingDetail.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      print('❌ [API] Failed to fetch recording details: ${e.type}');
+      print('❌ [API] Error message: ${e.message}');
+      print('❌ [API] Response data: ${e.response?.data}');
+      rethrow;
+    } catch (e) {
+      print('❌ [API] Unexpected error fetching recording details: $e');
       rethrow;
     }
   }
