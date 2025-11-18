@@ -5,6 +5,7 @@ import '../models/speaker_model.dart';
 import '../models/upload_response.dart';
 import '../models/job_status.dart';
 import '../models/recording_model.dart';
+import '../models/recording_list_model.dart';
 
 class ApiService {
   final Dio _dio;
@@ -136,6 +137,35 @@ class ApiService {
       rethrow;
     } catch (e) {
       print('❌ [API] Unexpected error fetching speaker: $e');
+      rethrow;
+    }
+  }
+
+  /// Fetch all recordings list
+  Future<List<RecordingListItem>> fetchRecordings({int limit = 100, int offset = 0}) async {
+    try {
+      print('🔍 [API] Fetching recordings list');
+
+      final response = await _dio.get('/recordings', queryParameters: {
+        'limit': limit,
+        'offset': offset,
+      });
+
+      final List<dynamic> recordingsList = response.data as List<dynamic>;
+      print('✅ [API] Fetched ${recordingsList.length} recordings');
+
+      return recordingsList
+          .map((json) => RecordingListItem.fromJson(json as Map<String, dynamic>))
+          .toList();
+    } on DioException catch (e) {
+      print('❌ [API] Failed to fetch recordings: ${e.type}');
+      print('❌ [API] Error message: ${e.message}');
+      if (e.response != null) {
+        print('❌ [API] Response data: ${e.response?.data}');
+      }
+      rethrow;
+    } catch (e) {
+      print('❌ [API] Unexpected error fetching recordings: $e');
       rethrow;
     }
   }

@@ -8,7 +8,7 @@ import 'providers/config_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/speaker_profile_provider.dart';
 import 'screens/onboarding/onboarding_screen.dart';
-import 'screens/home/home_screen.dart';
+import 'screens/main_navigation_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,7 +54,7 @@ class OrbiApp extends ConsumerWidget {
       themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
       home: const AppInitializer(),
       routes: {
-        '/home': (context) => const HomeScreen(),
+        '/home': (context) => const MainNavigationScreen(),
         '/onboarding': (context) => const OnboardingScreen(),
       },
     );
@@ -107,7 +107,7 @@ class AppInitializer extends ConsumerWidget {
           return const OnboardingScreen();
         } else {
           print('🎯 [Main] Navigating to home');
-          return const HomeScreen();
+          return const MainNavigationScreen();
         }
       },
     );
