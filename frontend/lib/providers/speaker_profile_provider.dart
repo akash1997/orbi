@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../services/speaker_profile_service.dart';
 
 final speakerProfileServiceProvider = Provider<SpeakerProfileService>((ref) {

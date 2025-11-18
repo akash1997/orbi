@@ -7,7 +7,6 @@ import '../../providers/speaker_profile_provider.dart';
 import '../../widgets/drawer_3d.dart';
 import '../insights/insight_detail_screen.dart';
 import '../recordings/recordings_screen.dart';
-import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shimmer/shimmer.dart';
@@ -25,6 +24,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   late AnimationController _gradientController;
   late Animation<double> _gradientAnimation;
   final Map<String, String?> _avatarCache = {};
+  final Map<String, String> _nameCache = {};
 
   @override
   void initState() {
@@ -83,11 +83,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     final service = ref.read(speakerProfileServiceProvider);
     for (var user in mockUsers) {
-      final speakerId = user['name'].toString().toLowerCase().replaceAll(' ', '_');
+      final originalName = user['name'].toString();
+      final speakerId = originalName.toLowerCase().replaceAll(' ', '_');
       final profile = await service.getProfile(speakerId);
       if (mounted) {
         setState(() {
           _avatarCache[speakerId] = profile?.avatarImagePath;
+          // Cache the updated name from profile, or use original if no profile
+          _nameCache[speakerId] = profile?.name ?? originalName;
         });
       }
     }
@@ -455,7 +458,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                       child: _avatarCache[speakerId] == null
                           ? Center(
                               child: Text(
-                                _getInitials(user['name'].toString()),
+                                _getInitials(_nameCache[speakerId] ?? user['name'].toString()),
                                 style: const TextStyle(
                                   fontSize: 32,
                                   fontWeight: FontWeight.bold,
@@ -468,9 +471,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                 ),
                 const SizedBox(height: 12),
-                // Name with better typography
+                // Name with better typography (use cached name if available)
                 Text(
-                  user['name'],
+                  _nameCache[speakerId] ?? user['name'],
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.2,

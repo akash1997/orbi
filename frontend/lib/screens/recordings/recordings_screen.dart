@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../../providers/config_provider.dart';
 
 class RecordingsScreen extends ConsumerStatefulWidget {
@@ -14,11 +15,50 @@ class RecordingsScreen extends ConsumerStatefulWidget {
 class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
   List<FileSystemEntity> _audioFiles = [];
   bool _isLoading = true;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  String? _expandedFilePath;
+  bool _isPlaying = false;
+  Duration _duration = Duration.zero;
+  Duration _position = Duration.zero;
 
   @override
   void initState() {
     super.initState();
     _loadRecordings();
+    _setupAudioPlayer();
+  }
+
+  void _setupAudioPlayer() {
+    _audioPlayer.onDurationChanged.listen((duration) {
+      setState(() {
+        _duration = duration;
+      });
+    });
+
+    _audioPlayer.onPositionChanged.listen((position) {
+      setState(() {
+        _position = position;
+      });
+    });
+
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      setState(() {
+        _isPlaying = state == PlayerState.playing;
+      });
+    });
+
+    _audioPlayer.onPlayerComplete.listen((event) {
+      setState(() {
+        _isPlaying = false;
+        _position = Duration.zero;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _audioPlayer.dispose();
+    super.dispose();
   }
 
   Future<void> _loadRecordings() async {
@@ -38,6 +78,21 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
           // Filter for audio files
           final audioFiles = entities.where((entity) {
             if (entity is File) {
+              final fileName = entity.uri.pathSegments.last;
+
+              // Ignore hidden files (starting with .)
+              if (fileName.startsWith('.')) return false;
+
+              // Ignore Android deleted/trashed files
+              if (fileName.startsWith('~') || fileName.endsWith('~')) return false;
+
+              // Ignore Android temporary/cache files
+              if (fileName.contains('.tmp') || fileName.contains('.temp')) return false;
+
+              // Ignore Android trashed files pattern
+              if (fileName.contains('.trashed-')) return false;
+
+              // Check for valid audio extensions
               final extension = entity.path.toLowerCase().split('.').last;
               return ['mp3', 'm4a', 'wav', 'aac', 'flac', 'ogg'].contains(extension);
             }
@@ -80,6 +135,58 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+
+    if (hours > 0) {
+      return '$hours:${twoDigits(minutes)}:${twoDigits(seconds)}';
+    }
+    return '${twoDigits(minutes)}:${twoDigits(seconds)}';
+  }
+
+  Future<void> _playAudio(String filePath) async {
+    try {
+      if (_expandedFilePath == filePath && _isPlaying) {
+        await _audioPlayer.pause();
+      } else {
+        if (_expandedFilePath != filePath) {
+          await _audioPlayer.stop();
+          setState(() {
+            _expandedFilePath = filePath;
+            _position = Duration.zero;
+          });
+        }
+        await _audioPlayer.play(DeviceFileSource(filePath));
+      }
+    } catch (e) {
+      print('❌ [RecordingsScreen] Error playing audio: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error playing audio: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _seekTo(Duration position) async {
+    await _audioPlayer.seek(position);
+  }
+
+  void _toggleCardExpansion(String filePath) {
+    setState(() {
+      if (_expandedFilePath == filePath) {
+        _expandedFilePath = null;
+        _audioPlayer.stop();
+      } else {
+        _expandedFilePath = filePath;
+        _playAudio(filePath);
+      }
+    });
   }
 
   @override
@@ -166,6 +273,8 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
     final fileSize = _formatFileSize(fileStat.size);
     final dateFormatter = DateFormat('MMM dd, yyyy');
     final modifiedDate = fileStat.modified;
+    final isExpanded = _expandedFilePath == file.path;
+    final isCurrentlyPlaying = isExpanded && _isPlaying;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12.0),
@@ -174,14 +283,7 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: InkWell(
-        onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Selected: $fileName'),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        },
+        onTap: () => _toggleCardExpansion(file.path),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -255,6 +357,62 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
                   ),
                 ],
               ),
+              // Audio player (expanded)
+              if (isExpanded) ...[
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 12),
+                // Play/Pause button
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        isCurrentlyPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                        size: 48,
+                      ),
+                      color: Theme.of(context).colorScheme.primary,
+                      onPressed: () => _playAudio(file.path),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Progress bar
+                Column(
+                  children: [
+                    SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 2.0,
+                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6.0),
+                        overlayShape: const RoundSliderOverlayShape(overlayRadius: 14.0),
+                      ),
+                      child: Slider(
+                        value: _position.inSeconds.toDouble(),
+                        max: _duration.inSeconds.toDouble() > 0 ? _duration.inSeconds.toDouble() : 1.0,
+                        onChanged: (value) {
+                          _seekTo(Duration(seconds: value.toInt()));
+                        },
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            _formatDuration(_position),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          Text(
+                            _formatDuration(_duration),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
