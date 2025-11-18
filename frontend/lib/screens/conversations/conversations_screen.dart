@@ -185,7 +185,7 @@ class _ConversationsScreenState extends State<ConversationsScreen> {
     return RefreshIndicator(
       onRefresh: _loadRecordings,
       child: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
         itemCount: _recordings!.length,
         itemBuilder: (context, index) {
           final recording = _recordings![index];

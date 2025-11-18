@@ -494,6 +494,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               padding: const EdgeInsets.all(16.0),
                               sliver: _buildUserGrid(context, isLoading: false),
                             ),
+                            const SliverToBoxAdapter(
+                              child: SizedBox(height: 100),
+                            ),
                           ],
                         ),
                       ),
