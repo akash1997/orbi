@@ -565,12 +565,16 @@ class _ConversationDetailScreenState extends State<ConversationDetailScreen>
                       size: 16,
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      topic,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: color,
-                            fontWeight: FontWeight.w600,
-                          ),
+                    Flexible(
+                      child: Text(
+                        topic,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: color,
+                              fontWeight: FontWeight.w600,
+                            ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
+                      ),
                     ),
                   ],
                 ),
