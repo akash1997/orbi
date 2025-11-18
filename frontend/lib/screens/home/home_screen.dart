@@ -6,6 +6,7 @@ import '../../providers/file_monitor_provider.dart';
 import '../../providers/speaker_profile_provider.dart';
 import '../../widgets/drawer_3d.dart';
 import '../insights/insight_detail_screen.dart';
+import '../recordings/recordings_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:fluttertoast/fluttertoast.dart';
@@ -92,6 +93,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
   }
 
+  Future<void> _onViewRecordingsTap(BuildContext context) async {
+    // Close drawer first
+    _drawerKey.currentState?.toggleDrawer();
+
+    // Navigate to recordings screen
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const RecordingsScreen(),
+      ),
+    );
+  }
+
   Future<void> _onChangeFolderTap(BuildContext context) async {
     try {
       // Close drawer first
@@ -152,6 +165,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       key: _drawerKey,
       isMonitoring: fileMonitorState.isMonitoring,
       monitoredFolderPath: config?.monitoredFolderPath ?? 'No folder selected',
+      onViewRecordingsTap: () => _onViewRecordingsTap(context),
       onChangeFolderTap: () => _onChangeFolderTap(context),
       child: configAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),

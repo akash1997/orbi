@@ -6,6 +6,7 @@ class Drawer3D extends StatefulWidget {
   final bool isMonitoring;
   final String monitoredFolderPath;
   final VoidCallback? onChangeFolderTap;
+  final VoidCallback? onViewRecordingsTap;
 
   const Drawer3D({
     super.key,
@@ -13,6 +14,7 @@ class Drawer3D extends StatefulWidget {
     required this.isMonitoring,
     required this.monitoredFolderPath,
     this.onChangeFolderTap,
+    this.onViewRecordingsTap,
   });
 
   @override
@@ -230,6 +232,16 @@ class Drawer3DState extends State<Drawer3D>
 
                             const Divider(),
                             const SizedBox(height: 16),
+
+                            // View Recordings Option
+                            _buildSettingTile(
+                              context,
+                              icon: Icons.audio_file,
+                              title: 'View Recordings',
+                              subtitle: 'Browse all audio files',
+                              enabled: true,
+                              onTap: widget.onViewRecordingsTap,
+                            ),
 
                             // Change Folder Option
                             _buildSettingTile(
