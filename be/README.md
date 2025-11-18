@@ -425,3 +425,179 @@ Built with:
 - [FastAPI](https://fastapi.tiangolo.com/) - Web framework
 - [Celery](https://docs.celeryq.dev/) - Task queue
 - [FAISS](https://github.com/facebookresearch/faiss) - Vector similarity search
+
+## LLM Provider Configuration
+
+The application supports multiple LLM providers for generating conversation insights and speaker analysis:
+
+### Supported Providers
+
+1. **OpenAI (default)**
+   - Models: `gpt-4o-mini`, `gpt-4o`, `gpt-4-turbo`, etc.
+   - Get API key: https://platform.openai.com/api-keys
+
+2. **Anthropic Claude**
+   - Models: `claude-3-5-sonnet-20241022`, `claude-3-opus-20240229`, etc.
+   - Get API key: https://console.anthropic.com/
+
+3. **Google Gemini** (NEW)
+   - Models: `gemini-1.5-flash`, `gemini-1.5-pro`
+   - Get API key: https://aistudio.google.com/app/apikey
+
+### Configuration
+
+Set your preferred provider and model in `.env`:
+
+```bash
+# Use OpenAI (default)
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o-mini
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxx
+
+# OR use Anthropic Claude
+LLM_PROVIDER=anthropic
+LLM_MODEL=claude-3-5-sonnet-20241022
+ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxxx
+
+# OR use Google Gemini
+LLM_PROVIDER=gemini
+LLM_MODEL=gemini-1.5-flash
+GEMINI_API_KEY=xxxxxxxxxxxxxxxxxxxxx
+```
+
+### Model Recommendations
+
+| Provider | Model | Speed | Quality | Cost | Best For |
+|----------|-------|-------|---------|------|----------|
+| Gemini | gemini-1.5-flash | ⚡⚡⚡ | ⭐⭐⭐ | 💰 | Fast, cost-effective insights |
+| OpenAI | gpt-4o-mini | ⚡⚡ | ⭐⭐⭐⭐ | 💰💰 | Balanced performance |
+| Anthropic | claude-3-5-sonnet | ⚡⚡ | ⭐⭐⭐⭐⭐ | 💰💰💰 | Highest quality analysis |
+| Gemini | gemini-1.5-pro | ⚡ | ⭐⭐⭐⭐⭐ | 💰💰 | Complex conversations |
+
+### Features by Provider
+
+All providers support:
+- ✅ Conversation summarization
+- ✅ Sentiment analysis
+- ✅ Key topic extraction
+- ✅ Action item detection
+- ✅ Meeting reminder extraction
+- ✅ Speaker-specific insights
+- ✅ Communication style analysis
+- ✅ JSON-formatted responses
+
+
+## Pipeline-Specific Model Configuration
+
+You can configure different models for each pipeline stage to optimize for cost, speed, or quality:
+
+### Pipeline Stages
+
+1. **Diarization Pipeline**: Speaker detection and segmentation
+   - Model: `DIARIZATION_MODEL` (pyannote)
+   - Cannot be changed per-conversation (fixed model)
+
+2. **Transcription Pipeline**: Speech-to-text conversion
+   - Model: `WHISPER_MODEL` (tiny/base/small/medium/large)
+   - Cannot be changed per-conversation (fixed model)
+
+3. **Conversation Insights Pipeline**: Overall conversation analysis
+   - Provider: `CONVERSATION_LLM_PROVIDER` (openai/anthropic/gemini)
+   - Model: `CONVERSATION_LLM_MODEL`
+   - Generates: Summary, sentiment, action items, meeting reminders
+
+4. **Speaker Insights Pipeline**: Individual speaker analysis
+   - Provider: `SPEAKER_LLM_PROVIDER` (openai/anthropic/gemini)
+   - Model: `SPEAKER_LLM_MODEL`
+   - Generates: Speaking style, improvements, communication effectiveness
+
+### Configuration Examples
+
+**Example 1: Use different providers for different pipelines**
+```bash
+# Default LLM
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o-mini
+
+# Use Gemini Flash for fast conversation summaries
+CONVERSATION_LLM_PROVIDER=gemini
+CONVERSATION_LLM_MODEL=gemini-1.5-flash
+
+# Use Claude for detailed speaker coaching
+SPEAKER_LLM_PROVIDER=anthropic
+SPEAKER_LLM_MODEL=claude-3-5-sonnet-20241022
+```
+
+**Example 2: Cost-optimized setup**
+```bash
+# Use Gemini Flash for everything (most cost-effective)
+LLM_PROVIDER=gemini
+LLM_MODEL=gemini-1.5-flash
+CONVERSATION_LLM_PROVIDER=gemini
+CONVERSATION_LLM_MODEL=gemini-1.5-flash
+SPEAKER_LLM_PROVIDER=gemini
+SPEAKER_LLM_MODEL=gemini-1.5-flash
+```
+
+**Example 3: Quality-optimized setup**
+```bash
+# Use Claude Sonnet for everything (highest quality)
+LLM_PROVIDER=anthropic
+LLM_MODEL=claude-3-5-sonnet-20241022
+# No need to set pipeline-specific configs, defaults will be used
+```
+
+**Example 4: Balanced setup**
+```bash
+# Use GPT-4o-mini as default
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o-mini
+
+# Use Gemini Pro for complex conversation analysis
+CONVERSATION_LLM_PROVIDER=gemini
+CONVERSATION_LLM_MODEL=gemini-1.5-pro
+
+# Keep default for speaker insights
+# (SPEAKER_LLM_PROVIDER and SPEAKER_LLM_MODEL not set, will use defaults)
+```
+
+### Cost Comparison
+
+Approximate costs per 1M tokens (as of 2024):
+
+| Provider | Model | Input | Output | Best For |
+|----------|-------|-------|--------|----------|
+| Gemini | gemini-1.5-flash | $0.075 | $0.30 | High volume, fast processing |
+| OpenAI | gpt-4o-mini | $0.15 | $0.60 | Balanced cost/quality |
+| Gemini | gemini-1.5-pro | $1.25 | $5.00 | Complex conversations |
+| Anthropic | claude-3-5-sonnet | $3.00 | $15.00 | Highest quality analysis |
+
+### When to Use Pipeline-Specific Configuration
+
+- **High Volume**: Use Gemini Flash for conversation insights (cheaper, faster)
+- **Detailed Coaching**: Use Claude for speaker insights (better feedback quality)
+- **Budget Constraints**: Use Gemini Flash for everything
+- **Quality Priority**: Use Claude for everything
+- **Balanced**: Use GPT-4o-mini as default, Gemini Pro for complex tasks
+
+### Transcription Model Selection
+
+Configure Whisper model based on your needs:
+
+```bash
+# Fastest, lowest quality (good for testing)
+WHISPER_MODEL=tiny
+
+# Fast, decent quality (recommended for most use cases)
+WHISPER_MODEL=base
+
+# Balanced (default)
+WHISPER_MODEL=small
+
+# High quality (slower)
+WHISPER_MODEL=medium
+
+# Highest quality (slowest, requires more memory)
+WHISPER_MODEL=large
+```
+

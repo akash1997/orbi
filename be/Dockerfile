@@ -50,6 +50,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
     numpy>=1.24.0 \
     openai>=1.0.0 \
     anthropic>=0.7.0 \
+    google-generativeai>=0.3.0 \
     python-dotenv>=1.0.0 \
     python-jose[cryptography]>=3.3.0 \
     flower>=2.0.0

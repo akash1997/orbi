@@ -2,6 +2,7 @@
 
 # Variables
 COMPOSE = docker-compose
+COMPOSE_DEV = docker-compose -f docker-compose.yml -f docker-compose.dev.yml
 COMPOSE_PROD = docker-compose -f docker-compose.yml -f docker-compose.prod.yml
 
 help: ## Show this help message
@@ -14,12 +15,23 @@ help: ## Show this help message
 build: ## Build Docker images
 	$(COMPOSE) build
 
-up: ## Start all services
+up: ## Start all services (production mode - data persists)
 	$(COMPOSE) up -d
-	@echo "Services started!"
+	@echo "Services started in PRODUCTION mode!"
 	@echo "API: http://localhost:8000"
 	@echo "API Docs: http://localhost:8000/docs"
 	@echo "Flower: http://localhost:5555"
+	@echo ""
+	@echo "Note: Data is persistent and will survive restarts."
+
+dev: ## Start services in development mode with hot-reload
+	$(COMPOSE_DEV) up -d
+	@echo "Services started in DEVELOPMENT mode!"
+	@echo "API: http://localhost:8000 (with hot-reload)"
+	@echo "API Docs: http://localhost:8000/docs"
+	@echo "Flower: http://localhost:5555"
+	@echo ""
+	@echo "Note: Source code is mounted for hot-reload, but data is still persistent."
 
 down: ## Stop all services
 	$(COMPOSE) down

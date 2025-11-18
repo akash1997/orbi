@@ -1,0 +1,25 @@
+# Development overrides for docker-compose.yml
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  api:
+    volumes:
+      # Mount source code for hot-reload in development
+      - ./be:/app
+      # Named volumes take precedence, so data is still persistent
+      - orbi-data:/app/data
+      - orbi-models:/app/data/models_cache
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - DEBUG=True
+
+  worker:
+    volumes:
+      # Mount source code for hot-reload in development
+      - ./be:/app
+      # Named volumes take precedence
+      - orbi-data:/app/data
+      - orbi-models:/app/data/models_cache
+    # Restart worker on code changes manually, or use watchdog
+    environment:
+      - DEBUG=True

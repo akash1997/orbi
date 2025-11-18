@@ -1,6 +1,6 @@
 """Service for generating conversation and speaker insights using LLM."""
 import logging
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from sqlalchemy.orm import Session
 
 from database.models import ConversationInsight, SpeakerInsight, SpeakerAudioFile
@@ -10,6 +10,7 @@ from utils.llm_client import (
     count_filler_words,
     calculate_speaking_pace
 )
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +26,30 @@ class InsightsGenerator:
             db: Database session
         """
         self.db = db
+
+        # Initialize separate LLM clients for different pipelines
         try:
-            self.llm_client = LLMClient()
+            # Conversation insights client
+            conv_provider = settings.CONVERSATION_LLM_PROVIDER or settings.LLM_PROVIDER
+            conv_model = settings.CONVERSATION_LLM_MODEL or settings.LLM_MODEL
+            self.conversation_llm = LLMClient(provider=conv_provider, model=conv_model)
+            logger.info(f"Initialized conversation LLM: {conv_provider} - {conv_model}")
         except Exception as e:
-            logger.error(f"Error initializing LLM client: {e}")
-            self.llm_client = None
+            logger.error(f"Error initializing conversation LLM client: {e}")
+            self.conversation_llm = None
+
+        try:
+            # Speaker insights client
+            speaker_provider = settings.SPEAKER_LLM_PROVIDER or settings.LLM_PROVIDER
+            speaker_model = settings.SPEAKER_LLM_MODEL or settings.LLM_MODEL
+            self.speaker_llm = LLMClient(provider=speaker_provider, model=speaker_model)
+            logger.info(f"Initialized speaker LLM: {speaker_provider} - {speaker_model}")
+        except Exception as e:
+            logger.error(f"Error initializing speaker LLM client: {e}")
+            self.speaker_llm = None
+
+        # Keep reference for backward compatibility
+        self.llm_client = self.conversation_llm
 
     def generate_conversation_insights(
         self,
@@ -48,13 +68,13 @@ class InsightsGenerator:
         Returns:
             Created ConversationInsight
         """
-        if not self.llm_client:
-            logger.error("LLM client not available")
-            raise RuntimeError("LLM client not initialized")
+        if not self.conversation_llm:
+            logger.error("Conversation LLM client not available")
+            raise RuntimeError("Conversation LLM client not initialized")
 
         try:
-            # Generate insights using LLM
-            insights_data = self.llm_client.generate_conversation_insights(
+            # Generate insights using conversation-specific LLM
+            insights_data = self.conversation_llm.generate_conversation_insights(
                 full_transcript,
                 speaker_names
             )
@@ -101,9 +121,9 @@ class InsightsGenerator:
         Returns:
             Created SpeakerInsight
         """
-        if not self.llm_client:
-            logger.error("LLM client not available")
-            raise RuntimeError("LLM client not initialized")
+        if not self.speaker_llm:
+            logger.error("Speaker LLM client not available")
+            raise RuntimeError("Speaker LLM client not initialized")
 
         try:
             # Calculate metrics
@@ -111,8 +131,8 @@ class InsightsGenerator:
             filler_count = count_filler_words(speaker_transcript)
             speaking_pace = calculate_speaking_pace(speaker_transcript, total_duration)
 
-            # Generate LLM insights
-            llm_insights = self.llm_client.generate_speaker_insights(
+            # Generate LLM insights using speaker-specific LLM
+            llm_insights = self.speaker_llm.generate_speaker_insights(
                 speaker_transcript,
                 speaker_name
             )

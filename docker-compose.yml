@@ -37,13 +37,13 @@ services:
       - MODELS_CACHE_DIR=/app/data/models_cache
       - VECTOR_DB_PATH=/app/data/speaker_embeddings
     volumes:
-      - ./be:/app
+      # Persistent data volumes - these take precedence over bind mounts
       - orbi-data:/app/data
       - orbi-models:/app/data/models_cache
     depends_on:
       redis:
         condition: service_healthy
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -71,7 +71,7 @@ services:
       - MODELS_CACHE_DIR=/app/data/models_cache
       - VECTOR_DB_PATH=/app/data/speaker_embeddings
     volumes:
-      - ./be:/app
+      # Persistent data volumes
       - orbi-data:/app/data
       - orbi-models:/app/data/models_cache
     depends_on:

@@ -34,16 +34,39 @@ class Settings(BaseSettings):
     NEW_SPEAKER_THRESHOLD: float = 0.70  # Below this = definitely new speaker
     EMBEDDING_DIMENSION: int = 192  # pyannote embedding dimension
 
-    # Models
+    # Diarization Models
     DIARIZATION_MODEL: str = "pyannote/speaker-diarization-3.1"
     SPEAKER_EMBEDDING_MODEL: str = "pyannote/wespeaker-voxceleb-resnet34-LM"
+
+    # Transcription Models
     WHISPER_MODEL: str = "base"  # tiny/base/small/medium/large
 
     # LLM API Keys
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
-    LLM_PROVIDER: str = "openai"  # "openai" or "anthropic"
-    LLM_MODEL: str = "gpt-4o-mini"  # or "claude-3-5-sonnet-20241022"
+    GEMINI_API_KEY: str = ""
+
+    # Audio Processing Pipeline Selection
+    AUDIO_PIPELINE: str = "traditional"  # "traditional" or "gemini"
+    # - traditional: Uses pyannote (diarization) + Whisper (transcription) + LLM (insights)
+    # - gemini: Uses only Gemini API for entire pipeline (requires GEMINI_API_KEY)
+
+    # Gemini Audio Pipeline Model (only used when AUDIO_PIPELINE=gemini)
+    # IMPORTANT: Only Pro models support audio files (flash does NOT support audio)
+    GEMINI_AUDIO_MODEL: str = "gemini-1.5-pro"  # Options: gemini-1.5-pro, gemini-1.5-pro-002
+
+    # Default LLM Configuration (used when pipeline-specific config not provided)
+    LLM_PROVIDER: str = "openai"  # "openai", "anthropic", or "gemini"
+    LLM_MODEL: str = "gpt-4o-mini"
+
+    # Pipeline-Specific LLM Configuration (optional - overrides defaults)
+    # Conversation Insights Pipeline
+    CONVERSATION_LLM_PROVIDER: str = ""  # Leave empty to use LLM_PROVIDER
+    CONVERSATION_LLM_MODEL: str = ""  # Leave empty to use LLM_MODEL
+
+    # Speaker Insights Pipeline
+    SPEAKER_LLM_PROVIDER: str = ""  # Leave empty to use LLM_PROVIDER
+    SPEAKER_LLM_MODEL: str = ""  # Leave empty to use LLM_MODEL
 
     # HuggingFace (required for pyannote)
     HF_TOKEN: str = ""

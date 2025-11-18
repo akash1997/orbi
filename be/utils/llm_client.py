@@ -8,14 +8,14 @@ logger = logging.getLogger(__name__)
 
 
 class LLMClient:
-    """Client for interacting with LLM APIs (OpenAI or Anthropic)."""
+    """Client for interacting with LLM APIs (OpenAI, Anthropic, or Gemini)."""
 
     def __init__(self, provider: str = None, model: str = None):
         """
         Initialize LLM client.
 
         Args:
-            provider: LLM provider ("openai" or "anthropic")
+            provider: LLM provider ("openai", "anthropic", or "gemini")
             model: Model name
         """
         self.provider = provider or settings.LLM_PROVIDER
@@ -27,6 +27,10 @@ class LLMClient:
         elif self.provider == "anthropic":
             from anthropic import Anthropic
             self.client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        elif self.provider == "gemini":
+            import google.generativeai as genai
+            genai.configure(api_key=settings.GEMINI_API_KEY)
+            self.client = genai.GenerativeModel(self.model)
         else:
             raise ValueError(f"Unsupported LLM provider: {self.provider}")
 
@@ -71,6 +75,27 @@ class LLMClient:
                     ]
                 )
                 content = response.content[0].text
+            elif self.provider == "gemini":
+                # Gemini expects a single prompt string
+                full_prompt = f"""You are an expert conversation analyst. Analyze conversations and provide structured insights in JSON format.
+
+{prompt}
+
+IMPORTANT: Respond ONLY with valid JSON. Do not include any markdown formatting, code blocks, or explanatory text."""
+
+                response = self.client.generate_content(
+                    full_prompt,
+                    generation_config={
+                        "temperature": 0.3,
+                        "max_output_tokens": 4096,
+                    }
+                )
+                content = response.text
+                # Remove markdown code blocks if present
+                if content.startswith("```json"):
+                    content = content.replace("```json", "").replace("```", "").strip()
+                elif content.startswith("```"):
+                    content = content.replace("```", "").strip()
             else:
                 raise ValueError(f"Unsupported provider: {self.provider}")
 
@@ -122,6 +147,27 @@ class LLMClient:
                     ]
                 )
                 content = response.content[0].text
+            elif self.provider == "gemini":
+                # Gemini expects a single prompt string
+                full_prompt = f"""You are an expert speech coach analyzing individual speaking patterns. Provide constructive feedback in JSON format.
+
+{prompt}
+
+IMPORTANT: Respond ONLY with valid JSON. Do not include any markdown formatting, code blocks, or explanatory text."""
+
+                response = self.client.generate_content(
+                    full_prompt,
+                    generation_config={
+                        "temperature": 0.3,
+                        "max_output_tokens": 2048,
+                    }
+                )
+                content = response.text
+                # Remove markdown code blocks if present
+                if content.startswith("```json"):
+                    content = content.replace("```json", "").replace("```", "").strip()
+                elif content.startswith("```"):
+                    content = content.replace("```", "").strip()
             else:
                 raise ValueError(f"Unsupported provider: {self.provider}")
 
