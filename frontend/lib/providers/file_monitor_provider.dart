@@ -12,22 +12,30 @@ class FileMonitorState {
   final bool isMonitoring;
   final List<AudioFileModel> detectedFiles;
   final String? error;
+  final String? lastJobId;
+  final String? lastUploadedFile;
 
   FileMonitorState({
     this.isMonitoring = false,
     this.detectedFiles = const [],
     this.error,
+    this.lastJobId,
+    this.lastUploadedFile,
   });
 
   FileMonitorState copyWith({
     bool? isMonitoring,
     List<AudioFileModel>? detectedFiles,
     String? error,
+    String? lastJobId,
+    String? lastUploadedFile,
   }) {
     return FileMonitorState(
       isMonitoring: isMonitoring ?? this.isMonitoring,
       detectedFiles: detectedFiles ?? this.detectedFiles,
       error: error,
+      lastJobId: lastJobId,
+      lastUploadedFile: lastUploadedFile,
     );
   }
 }
@@ -104,17 +112,23 @@ class FileMonitorNotifier extends StateNotifier<FileMonitorState> {
 
       if (await file.exists()) {
         print('📤 [FileMonitorProvider] File exists, calling API...');
-        await _apiService.uploadAudioFile(file);
+        final uploadResponse = await _apiService.uploadAudioFile(file);
         print('✅ [FileMonitorProvider] Upload completed for: ${audioFile.fileName}');
+        print('✅ [FileMonitorProvider] Job ID: ${uploadResponse.jobId}');
         print('✅ [FileMonitorProvider] Completion time: ${DateTime.now().toIso8601String()}');
+
+        // Update state with job ID
+        state = state.copyWith(
+          lastJobId: uploadResponse.jobId,
+          lastUploadedFile: audioFile.fileName,
+        );
       } else {
         print('❌ [FileMonitorProvider] File not found: ${audioFile.filePath}');
       }
     } catch (e) {
       print('❌ [FileMonitorProvider] Upload error: $e');
       print('❌ [FileMonitorProvider] Error time: ${DateTime.now().toIso8601String()}');
-      // Don't update error state for upload failures in Phase 1
-      // We expect uploads to fail since backend is not ready
+      state = state.copyWith(error: e.toString());
     }
   }
 

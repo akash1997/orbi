@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import '../../providers/config_provider.dart';
+import '../../services/api_service.dart';
+import '../../models/job_status.dart';
 
 class RecordingsScreen extends ConsumerStatefulWidget {
   const RecordingsScreen({super.key});
@@ -16,10 +19,16 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
   List<FileSystemEntity> _audioFiles = [];
   bool _isLoading = true;
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final ApiService _apiService = ApiService();
   String? _expandedFilePath;
   bool _isPlaying = false;
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
+
+  // Track upload job status for each file
+  final Map<String, String> _fileJobIds = {}; // filePath -> jobId
+  final Map<String, JobStatus?> _jobStatuses = {}; // filePath -> JobStatus
+  final Map<String, bool> _uploadingFiles = {}; // filePath -> isUploading
 
   @override
   void initState() {
@@ -187,6 +196,101 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
         _playAudio(filePath);
       }
     });
+  }
+
+  /// Upload audio file to backend
+  Future<void> _uploadAudioFile(File file) async {
+    final fileName = file.uri.pathSegments.last;
+    final filePath = file.path;
+
+    setState(() {
+      _uploadingFiles[filePath] = true;
+    });
+
+    try {
+      print('📤 [RecordingsScreen] Uploading file: $fileName');
+
+      // Show uploading toast
+      Fluttertoast.showToast(
+        msg: "Uploading $fileName...",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.blue,
+        textColor: Colors.white,
+      );
+
+      // Upload file
+      final uploadResponse = await _apiService.uploadAudioFile(file);
+
+      print('✅ [RecordingsScreen] Upload successful! Job ID: ${uploadResponse.jobId}');
+
+      // Store job ID and fetch initial status
+      if (mounted) {
+        setState(() {
+          _uploadingFiles[filePath] = false;
+          _fileJobIds[filePath] = uploadResponse.jobId;
+        });
+
+        // Fetch initial job status
+        await _refreshJobStatus(filePath);
+
+        Fluttertoast.showToast(
+          msg: "Upload successful! Processing...",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.green,
+          textColor: Colors.white,
+        );
+      }
+    } catch (e) {
+      print('❌ [RecordingsScreen] Upload error: $e');
+
+      if (mounted) {
+        setState(() {
+          _uploadingFiles[filePath] = false;
+        });
+
+        Fluttertoast.showToast(
+          msg: "Failed to upload $fileName",
+          toastLength: Toast.LENGTH_LONG,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+      }
+    }
+  }
+
+  /// Refresh job status for a file
+  Future<void> _refreshJobStatus(String filePath) async {
+    final jobId = _fileJobIds[filePath];
+    if (jobId == null) return;
+
+    try {
+      print('🔄 [RecordingsScreen] Refreshing job status for: $jobId');
+
+      final jobStatus = await _apiService.getJobStatus(jobId);
+
+      if (mounted) {
+        setState(() {
+          _jobStatuses[filePath] = jobStatus;
+        });
+
+        print('✅ [RecordingsScreen] Job status updated: ${jobStatus.status} (${jobStatus.progress}%)');
+      }
+    } catch (e) {
+      print('❌ [RecordingsScreen] Error fetching job status: $e');
+
+      if (mounted) {
+        Fluttertoast.showToast(
+          msg: "Failed to fetch job status",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.red,
+          textColor: Colors.white,
+        );
+      }
+    }
   }
 
   @override
@@ -357,6 +461,11 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
                   ),
                 ],
               ),
+              // Upload progress section
+              if (_uploadingFiles[file.path] == true || _jobStatuses[file.path] != null) ...[
+                const SizedBox(height: 12),
+                _buildUploadProgressSection(context, file),
+              ],
               // Audio player (expanded)
               if (isExpanded) ...[
                 const SizedBox(height: 16),
@@ -443,6 +552,188 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
     );
   }
 
+  Widget _buildUploadProgressSection(BuildContext context, File file) {
+    final filePath = file.path;
+    final isUploading = _uploadingFiles[filePath] == true;
+    final jobStatus = _jobStatuses[filePath];
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _getProgressBackgroundColor(context, isUploading, jobStatus),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: _getProgressBorderColor(isUploading, jobStatus),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _buildProgressIcon(isUploading, jobStatus),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _getProgressText(isUploading, jobStatus),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+              if (jobStatus != null && !jobStatus.isCompleted && !jobStatus.isFailed)
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 18),
+                  onPressed: () => _refreshJobStatus(filePath),
+                  tooltip: 'Refresh status',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              if (jobStatus != null && (jobStatus.isCompleted || jobStatus.isFailed))
+                IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () {
+                    setState(() {
+                      _jobStatuses.remove(filePath);
+                      _fileJobIds.remove(filePath);
+                    });
+                  },
+                  tooltip: 'Dismiss',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+            ],
+          ),
+          if (jobStatus != null) ...[
+            if (jobStatus.currentStep != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                jobStatus.currentStep!,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: 11,
+                      color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
+                    ),
+              ),
+            ],
+            if (jobStatus.isProcessing) ...[
+              const SizedBox(height: 8),
+              LinearProgressIndicator(
+                value: jobStatus.progress / 100,
+                backgroundColor: Colors.grey[300],
+                valueColor: AlwaysStoppedAnimation<Color>(_getProgressColor(jobStatus.progress)),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${jobStatus.progress}%',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 11,
+                    ),
+              ),
+            ],
+            if (jobStatus.errorMessage != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                jobStatus.errorMessage!,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: 11,
+                      color: Colors.red,
+                    ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressIcon(bool isUploading, JobStatus? jobStatus) {
+    if (isUploading) {
+      return const SizedBox(
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    }
+
+    if (jobStatus != null) {
+      if (jobStatus.isCompleted) {
+        return const Icon(Icons.check_circle, color: Colors.green, size: 20);
+      } else if (jobStatus.isFailed) {
+        return const Icon(Icons.error, color: Colors.red, size: 20);
+      } else {
+        return const SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        );
+      }
+    }
+
+    return const Icon(Icons.cloud_upload, size: 20);
+  }
+
+  String _getProgressText(bool isUploading, JobStatus? jobStatus) {
+    if (isUploading) {
+      return 'Uploading...';
+    }
+
+    if (jobStatus != null) {
+      if (jobStatus.isCompleted) {
+        return 'Processing completed!';
+      } else if (jobStatus.isFailed) {
+        return 'Processing failed';
+      } else {
+        return 'Processing audio file...';
+      }
+    }
+
+    return 'Ready to upload';
+  }
+
+  Color _getProgressBackgroundColor(BuildContext context, bool isUploading, JobStatus? jobStatus) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    if (jobStatus != null) {
+      if (jobStatus.isCompleted) {
+        return isDark ? Colors.green[900]!.withOpacity(0.3) : Colors.green[50]!;
+      } else if (jobStatus.isFailed) {
+        return isDark ? Colors.red[900]!.withOpacity(0.3) : Colors.red[50]!;
+      } else {
+        return isDark ? Colors.blue[900]!.withOpacity(0.3) : Colors.blue[50]!;
+      }
+    }
+
+    return isDark ? Colors.grey[800]! : Colors.grey[100]!;
+  }
+
+  Color _getProgressBorderColor(bool isUploading, JobStatus? jobStatus) {
+    if (jobStatus != null) {
+      if (jobStatus.isCompleted) {
+        return Colors.green;
+      } else if (jobStatus.isFailed) {
+        return Colors.red;
+      } else {
+        return Colors.blue;
+      }
+    }
+
+    return Colors.grey;
+  }
+
+  Color _getProgressColor(int progress) {
+    if (progress < 33) {
+      return Colors.orange;
+    } else if (progress < 66) {
+      return Colors.blue;
+    } else {
+      return Colors.green;
+    }
+  }
+
   void _showRecordingOptions(BuildContext context, File file) {
     final fileName = file.uri.pathSegments.last;
 
@@ -478,6 +769,14 @@ class _RecordingsScreenState extends ConsumerState<RecordingsScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Playing $fileName')),
                   );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.cloud_upload),
+                title: const Text('Upload to Server'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _uploadAudioFile(file);
                 },
               ),
               ListTile(

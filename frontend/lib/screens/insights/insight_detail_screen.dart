@@ -2,10 +2,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../providers/speaker_profile_provider.dart';
 import '../../services/speaker_profile_service.dart';
+import '../../services/api_service.dart';
+import '../../models/speaker_model.dart';
 
 class InsightDetailScreen extends ConsumerStatefulWidget {
+  final String speakerId;
   final String userName;
   final String duration;
   final int fileCount;
@@ -14,6 +18,7 @@ class InsightDetailScreen extends ConsumerStatefulWidget {
 
   const InsightDetailScreen({
     super.key,
+    required this.speakerId,
     required this.userName,
     required this.duration,
     required this.fileCount,
@@ -30,6 +35,12 @@ class _InsightDetailScreenState extends ConsumerState<InsightDetailScreen> {
   String? _avatarImagePath;
   final _nameController = TextEditingController();
   bool _showEditButtons = false;
+  final ApiService _apiService = ApiService();
+
+  // API data
+  Speaker? _speakerData;
+  bool _isLoadingData = true;
+  String? _loadingError;
 
   @override
   void initState() {
@@ -38,6 +49,7 @@ class _InsightDetailScreenState extends ConsumerState<InsightDetailScreen> {
     _avatarImagePath = widget.initialAvatarImagePath;
     _nameController.text = _currentName;
     _loadProfile();
+    _fetchSpeakerData();
 
     // Show edit buttons after Hero animation completes (typically 300ms)
     Future.delayed(const Duration(milliseconds: 350), () {
@@ -55,7 +67,7 @@ class _InsightDetailScreenState extends ConsumerState<InsightDetailScreen> {
     super.dispose();
   }
 
-  String get _speakerId => widget.userName.toLowerCase().replaceAll(' ', '_');
+  String get _speakerId => widget.speakerId;
 
   String _getInitials(String name) {
     final parts = name.trim().split(' ');
@@ -65,6 +77,37 @@ class _InsightDetailScreenState extends ConsumerState<InsightDetailScreen> {
     }
     // Get first letter of first name and first letter of last name
     return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'.toUpperCase();
+  }
+
+  Future<void> _fetchSpeakerData() async {
+    setState(() {
+      _isLoadingData = true;
+      _loadingError = null;
+    });
+
+    try {
+      print('🔍 [InsightDetailScreen] Fetching speaker data for: ${widget.speakerId}');
+
+      final speaker = await _apiService.getSpeaker(widget.speakerId);
+
+      if (mounted) {
+        setState(() {
+          _speakerData = speaker;
+          _isLoadingData = false;
+        });
+
+        print('✅ [InsightDetailScreen] Speaker data loaded: ${speaker.name}');
+      }
+    } catch (e) {
+      print('❌ [InsightDetailScreen] Error fetching speaker data: $e');
+
+      if (mounted) {
+        setState(() {
+          _loadingError = e.toString();
+          _isLoadingData = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadProfile() async {
@@ -324,66 +367,155 @@ class _InsightDetailScreenState extends ConsumerState<InsightDetailScreen> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Duration Card
-                  _buildInfoCard(
-                    context,
-                    icon: Icons.access_time,
-                    title: 'Total Duration',
-                    value: widget.duration,
-                    color: Colors.blue,
-                  ),
-                  const SizedBox(height: 16),
+              child: _isLoadingData
+                  ? _buildShimmerContent(context)
+                  : _loadingError != null
+                      ? _buildErrorContent(context)
+                      : _buildContent(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-                  // File Count Card
-                  _buildInfoCard(
-                    context,
-                    icon: Icons.audio_file,
-                    title: 'Audio Files',
-                    value: '${widget.fileCount} files',
-                    color: Colors.green,
-                  ),
-                  const SizedBox(height: 32),
+  Widget _buildShimmerContent(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-                  // Section Title
-                  Text(
-                    'Recent Activity',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Placeholder for activity list
-                  _buildActivityItem(
-                    context,
-                    'Recording analyzed',
-                    '2 hours ago',
-                    Icons.check_circle,
-                    Colors.green,
-                  ),
-                  _buildActivityItem(
-                    context,
-                    'Voice pattern detected',
-                    '5 hours ago',
-                    Icons.graphic_eq,
-                    Colors.blue,
-                  ),
-                  _buildActivityItem(
-                    context,
-                    'New audio file added',
-                    '1 day ago',
-                    Icons.add_circle,
-                    Colors.orange,
-                  ),
-                ],
+    return Shimmer.fromColors(
+      baseColor: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+      highlightColor: isDark ? Colors.grey[500]! : Colors.grey[100]!,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Shimmer cards
+          Container(
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            height: 80,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+          const SizedBox(height: 32),
+          Container(
+            height: 24,
+            width: 150,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(height: 16),
+          ...List.generate(
+            3,
+            (index) => Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: Container(
+                height: 60,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildErrorContent(BuildContext context) {
+    return Column(
+      children: [
+        const Icon(Icons.error_outline, size: 64, color: Colors.red),
+        const SizedBox(height: 16),
+        Text(
+          'Failed to load speaker data',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          _loadingError!,
+          style: Theme.of(context).textTheme.bodySmall,
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 16),
+        ElevatedButton.icon(
+          onPressed: _fetchSpeakerData,
+          icon: const Icon(Icons.refresh),
+          label: const Text('Retry'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
+    final speaker = _speakerData;
+    if (speaker == null) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Duration Card
+        _buildInfoCard(
+          context,
+          icon: Icons.access_time,
+          title: 'Total Duration',
+          value: speaker.getFormattedDuration(),
+          color: Colors.blue,
+        ),
+        const SizedBox(height: 16),
+
+        // File Count Card
+        _buildInfoCard(
+          context,
+          icon: Icons.audio_file,
+          title: 'Audio Files',
+          value: '${speaker.fileCount} files',
+          color: Colors.green,
+        ),
+        const SizedBox(height: 32),
+
+        // Section Title
+        Text(
+          'Recent Activity',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        const SizedBox(height: 16),
+
+        // Placeholder for activity list
+        _buildActivityItem(
+          context,
+          'Recording analyzed',
+          '2 hours ago',
+          Icons.check_circle,
+          Colors.green,
+        ),
+        _buildActivityItem(
+          context,
+          'Voice pattern detected',
+          '5 hours ago',
+          Icons.graphic_eq,
+          Colors.blue,
+        ),
+        _buildActivityItem(
+          context,
+          'New audio file added',
+          '1 day ago',
+          Icons.add_circle,
+          Colors.orange,
+        ),
+      ],
     );
   }
 

@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/config_provider.dart';
 import '../../providers/file_monitor_provider.dart';
 import '../../providers/speaker_profile_provider.dart';
 import '../../widgets/drawer_3d.dart';
+import '../../widgets/upload_progress_bar.dart';
 import '../insights/insight_detail_screen.dart';
 import '../recordings/recordings_screen.dart';
 import 'package:file_picker/file_picker.dart';
@@ -12,6 +14,7 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../services/api_service.dart';
 import '../../models/speaker_model.dart';
+import '../../models/job_status.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -31,6 +34,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   List<Speaker>? _speakers;
   bool _isLoadingSpeakers = false;
   String? _speakersError;
+
+  // Upload and job tracking
+  JobStatus? _currentJob;
+  Timer? _jobPollingTimer;
+  int _retryCount = 0;
+  static const int _maxRetries = 3;
+  Timer? _retryTimer;
 
   @override
   void initState() {
@@ -55,11 +65,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       _startMonitoring();
       _fetchSpeakers();
     });
+
+    // Listen for new uploads from file monitor
+    ref.listenManual(fileMonitorProvider, (previous, next) {
+      if (next.lastJobId != null && next.lastJobId != previous?.lastJobId) {
+        print('🆕 [HomeScreen] New job detected: ${next.lastJobId}');
+        _startJobPolling(next.lastJobId!);
+
+        // Show toast
+        Fluttertoast.showToast(
+          msg: "Processing ${next.lastUploadedFile ?? 'audio file'}...",
+          toastLength: Toast.LENGTH_SHORT,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.blue,
+          textColor: Colors.white,
+        );
+      }
+    });
   }
 
   @override
   void dispose() {
     _gradientController.dispose();
+    _jobPollingTimer?.cancel();
+    _retryTimer?.cancel();
     super.dispose();
   }
 
@@ -168,6 +197,163 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
   }
 
+  /// Upload an audio file automatically and start polling for job status
+  Future<void> _uploadFile(File file, String filename) async {
+    try {
+      print('📤 [HomeScreen] Auto-uploading file: ${file.path}');
+
+      // Show uploading toast
+      Fluttertoast.showToast(
+        msg: "Uploading $filename...",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+      );
+
+      // Upload file and get job ID
+      final uploadResponse = await _apiService.uploadAudioFile(file);
+      print('✅ [HomeScreen] Upload successful! Job ID: ${uploadResponse.jobId}');
+
+      // Start polling for job status
+      _startJobPolling(uploadResponse.jobId);
+
+      // Show success toast
+      Fluttertoast.showToast(
+        msg: "Processing $filename...",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.green,
+        textColor: Colors.white,
+      );
+    } catch (e) {
+      print('❌ [HomeScreen] Upload error: $e');
+      Fluttertoast.showToast(
+        msg: "Failed to upload $filename",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+      );
+    }
+  }
+
+  /// Start polling job status every 2 seconds
+  void _startJobPolling(String jobId) {
+    // Cancel any existing timer
+    _jobPollingTimer?.cancel();
+
+    // Poll immediately
+    _pollJobStatus(jobId);
+
+    // Then poll every 2 seconds
+    _jobPollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      _pollJobStatus(jobId);
+    });
+  }
+
+  /// Poll job status and update UI
+  Future<void> _pollJobStatus(String jobId) async {
+    try {
+      final jobStatus = await _apiService.getJobStatus(jobId);
+
+      if (mounted) {
+        setState(() {
+          _currentJob = jobStatus;
+        });
+      }
+
+      print('🔄 [HomeScreen] Job $jobId: ${jobStatus.status} (${jobStatus.progress}%)');
+
+      // Stop polling if job is completed or failed
+      if (jobStatus.isCompleted || jobStatus.isFailed) {
+        _jobPollingTimer?.cancel();
+
+        if (jobStatus.isCompleted) {
+          // Reset retry count on success
+          _retryCount = 0;
+
+          // Refresh speakers list
+          await _fetchSpeakers();
+
+          Fluttertoast.showToast(
+            msg: "Processing completed successfully!",
+            toastLength: Toast.LENGTH_SHORT,
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: Colors.green,
+            textColor: Colors.white,
+          );
+        } else if (jobStatus.isFailed) {
+          // Auto-retry logic
+          if (_retryCount < _maxRetries) {
+            _retryCount++;
+            final retryDelay = Duration(seconds: 2 * _retryCount); // Exponential backoff: 2s, 4s, 6s
+
+            print('⚠️ [HomeScreen] Job failed. Auto-retry ${_retryCount}/$_maxRetries in ${retryDelay.inSeconds}s');
+
+            Fluttertoast.showToast(
+              msg: "Job failed. Retrying in ${retryDelay.inSeconds}s... (${_retryCount}/$_maxRetries)",
+              toastLength: Toast.LENGTH_SHORT,
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: Colors.orange,
+              textColor: Colors.white,
+            );
+
+            // Schedule retry
+            _retryTimer?.cancel();
+            _retryTimer = Timer(retryDelay, () {
+              print('🔄 [HomeScreen] Auto-retrying job $jobId');
+              _startJobPolling(jobId);
+            });
+          } else {
+            print('❌ [HomeScreen] Max retries reached for job $jobId');
+            Fluttertoast.showToast(
+              msg: "Processing failed after $_maxRetries attempts",
+              toastLength: Toast.LENGTH_LONG,
+              gravity: ToastGravity.BOTTOM,
+              backgroundColor: Colors.red,
+              textColor: Colors.white,
+            );
+          }
+        }
+      }
+    } catch (e) {
+      print('❌ [HomeScreen] Error polling job status: $e');
+    }
+  }
+
+  /// Dismiss the current job progress bar
+  void _dismissJob() {
+    _jobPollingTimer?.cancel();
+    _retryTimer?.cancel();
+    setState(() {
+      _currentJob = null;
+      _retryCount = 0;
+    });
+  }
+
+  /// Manual retry - triggered by retry button
+  void _retryJob() {
+    if (_currentJob != null) {
+      print('🔄 [HomeScreen] Manual retry for job: ${_currentJob!.jobId}');
+
+      // Cancel any pending auto-retry
+      _retryTimer?.cancel();
+
+      // Reset retry count for manual retry
+      _retryCount = 0;
+
+      // Start polling again
+      _startJobPolling(_currentJob!.jobId);
+
+      Fluttertoast.showToast(
+        msg: "Retrying job...",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.blue,
+        textColor: Colors.white,
+      );
+    }
+  }
+
   Future<void> _onViewRecordingsTap(BuildContext context) async {
     // Close drawer first
     _drawerKey.currentState?.toggleDrawer();
@@ -254,29 +440,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             );
           }
 
-          return AnimatedBuilder(
-            animation: _gradientAnimation,
-            builder: (context, child) {
-              return Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color.lerp(
-                        Theme.of(context).colorScheme.primary.withOpacity(0.5),
-                        Theme.of(context).colorScheme.primaryContainer.withOpacity(0.7),
-                        _gradientAnimation.value,
-                      )!,
-                      Theme.of(context).colorScheme.surface,
-                    ],
-                    stops: const [0.0,  1.0],
+          return Scaffold(
+            bottomNavigationBar: _currentJob != null
+                ? UploadProgressBar(
+                    jobStatus: _currentJob!,
+                    onDismiss: _dismissJob,
+                    onRetry: _retryJob,
+                  )
+                : null,
+            body: AnimatedBuilder(
+              animation: _gradientAnimation,
+              builder: (context, child) {
+                return Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color.lerp(
+                          Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                          Theme.of(context).colorScheme.primaryContainer.withOpacity(0.7),
+                          _gradientAnimation.value,
+                        )!,
+                        Theme.of(context).colorScheme.surface,
+                      ],
+                      stops: const [0.0,  1.0],
+                    ),
                   ),
-                ),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 100),
-                    Expanded(
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 100),
+                      Expanded(
                       child: RefreshIndicator(
                         onRefresh: () async {
                           // Refresh speakers from API
@@ -308,6 +502,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 ),
               );
             },
+            ),
           );
         },
       ),
@@ -529,6 +724,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             await Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (context) => InsightDetailScreen(
+                  speakerId: speakerId,
                   userName: displayName,
                   duration: speaker.getFormattedDuration(),
                   fileCount: speaker.fileCount,
