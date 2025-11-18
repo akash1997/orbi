@@ -461,71 +461,222 @@ class _InsightDetailScreenState extends ConsumerState<InsightDetailScreen> {
     final speaker = _speakerData;
     if (speaker == null) return const SizedBox.shrink();
 
+    // Calculate total segments across all files
+    final totalSegments = speaker.files.fold<int>(
+      0,
+      (sum, file) => sum + file.segmentCount,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Duration Card
-        _buildInfoCard(
-          context,
-          icon: Icons.access_time,
-          title: 'Total Duration',
-          value: speaker.getFormattedDuration(),
-          color: Colors.blue,
-        ),
-        const SizedBox(height: 16),
-
-        // File Count Card
-        _buildInfoCard(
-          context,
-          icon: Icons.audio_file,
-          title: 'Audio Files',
-          value: '${speaker.fileCount} files',
-          color: Colors.green,
+        // Two Metric Cards in a Row - File Count and Total Duration
+        Row(
+          children: [
+            Expanded(
+              child: _buildMetricCard(
+                context,
+                icon: Icons.audio_file,
+                label: 'Audio Files',
+                value: '${speaker.fileCount}',
+                color: Colors.blue,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildMetricCard(
+                context,
+                icon: Icons.access_time,
+                label: 'Total Duration',
+                value: speaker.getFormattedDuration(),
+                color: Colors.orange,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 32),
 
-        // Section Title
-        Text(
-          'Recent Activity',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
+        // Files Section Header
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Recordings',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            if (totalSegments > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.purple.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$totalSegments segments',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.purple,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
               ),
+          ],
         ),
         const SizedBox(height: 16),
 
-        // Placeholder for activity list
-        _buildActivityItem(
-          context,
-          'Recording analyzed',
-          '2 hours ago',
-          Icons.check_circle,
-          Colors.green,
-        ),
-        _buildActivityItem(
-          context,
-          'Voice pattern detected',
-          '5 hours ago',
-          Icons.graphic_eq,
-          Colors.blue,
-        ),
-        _buildActivityItem(
-          context,
-          'New audio file added',
-          '1 day ago',
-          Icons.add_circle,
-          Colors.orange,
-        ),
+        // File Timeline
+        if (speaker.files.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32.0),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.audio_file_outlined,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No recordings yet',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          ...speaker.files.map((file) => _buildFileTimelineItem(context, file)),
       ],
     );
   }
 
-  Widget _buildInfoCard(
+  String _formatAvgDuration(double seconds) {
+    final minutes = seconds ~/ 60;
+    final secs = (seconds % 60).round();
+    if (minutes > 0) {
+      return '${minutes}m ${secs}s';
+    }
+    return '${secs}s';
+  }
+
+  Widget _buildCircularProgress(
+    BuildContext context, {
+    required int value,
+    required int maxValue,
+    required String label,
+    required Color color,
+  }) {
+    final percentage = (value / maxValue * 100).clamp(0, 100).toInt();
+    final progress = (value / maxValue).clamp(0.0, 1.0);
+
+    return Container(
+      width: 200,
+      height: 200,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Background circle
+          SizedBox(
+            width: 200,
+            height: 200,
+            child: CircularProgressIndicator(
+              value: 1.0,
+              strokeWidth: 16,
+              backgroundColor: Colors.transparent,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                Theme.of(context).colorScheme.surfaceContainerHighest,
+              ),
+            ),
+          ),
+          // Progress circle
+          SizedBox(
+            width: 200,
+            height: 200,
+            child: CircularProgressIndicator(
+              value: progress,
+              strokeWidth: 16,
+              backgroundColor: Colors.transparent,
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
+          // Center content
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$percentage%',
+                style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+              ),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricCard(
     BuildContext context, {
     required IconData icon,
-    required String title,
+    required String label,
     required String value,
     required Color color,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.2 : 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 32),
+          const SizedBox(height: 12),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInsightsCard(
+    BuildContext context,
+    Speaker speaker,
+    int totalSegments,
+    int avgSegments,
+  ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
@@ -535,104 +686,196 @@ class _InsightDetailScreenState extends ConsumerState<InsightDetailScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+            color: Colors.black.withOpacity(isDark ? 0.2 : 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 28,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withOpacity(0.6),
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
+          Row(
+            children: [
+              Text(
+                '💡 ',
+                style: TextStyle(fontSize: 24),
+              ),
+              Expanded(
+                child: Text(
+                  'Speaker Insights',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                 ),
-              ],
-            ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'This speaker has contributed ${speaker.fileCount} audio files with a total duration of ${speaker.getFormattedDuration()}. '
+            'On average, each file contains $avgSegments speaking segments, totaling $totalSegments segments across all recordings.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+                  height: 1.5,
+                ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildActivityItem(
-    BuildContext context,
-    String title,
-    String time,
-    IconData icon,
-    Color color,
-  ) {
+  Widget _buildFileTimelineItem(BuildContext context, SpeakerFile file) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final timeAgo = _getTimeAgo(file.uploadedAt);
+    final formattedDuration = _formatDuration(file.durationInFile);
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16.0),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _navigateToRecordingInsights(file.audioFileId),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDark ? 0.2 : 0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  time,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withOpacity(0.6),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(
+                    Icons.audio_file,
+                    color: Colors.blue,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        file.filename,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.access_time,
+                            size: 12,
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            formattedDuration,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            '• $timeAgo',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.purple.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${file.segmentCount}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.purple,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'segments',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                            fontSize: 10,
+                          ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.chevron_right,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
                 ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
+  }
+
+  String _formatDuration(double seconds) {
+    final minutes = seconds ~/ 60;
+    final secs = (seconds % 60).round();
+    if (minutes > 0) {
+      return '${minutes}m ${secs}s';
+    }
+    return '${secs}s';
+  }
+
+  void _navigateToRecordingInsights(String audioFileId) {
+    // TODO: Implement navigation to recording insights when the feature is ready
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Recording: $audioFileId'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  String _getTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d ago';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
   }
 }
